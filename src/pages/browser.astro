@@ -4,7 +4,7 @@ import SplitLayout from "@src-root/layouts/SplitLayout.astro";
 ---
 
 <SplitLayout>
-  <div class="is-flex is-flex-wrap-wrap has-background-info-50 p-2"></div>
+  <div class="is-flex is-flex-wrap-wrap has-background-info-15 p-2"></div>
   <InfoViewer slot="side-pain" />
 </SplitLayout>
 
@@ -16,6 +16,7 @@ import SplitLayout from "@src-root/layouts/SplitLayout.astro";
 </style>
 
 <script>
+  import "@scripts/image-card";
   import { path } from "@tauri-apps/api";
   import { readDir, readFile } from "@tauri-apps/plugin-fs";
 
@@ -84,42 +85,25 @@ import SplitLayout from "@src-root/layouts/SplitLayout.astro";
   );
 
   for (const imagePath of imageFullPaths) {
-    const imgEl = document.createElement("img");
     const mimeType = (await detectImageMineType(imagePath)) ?? "image/png";
-
     const imageData = await readFile(imagePath);
     // 画像の詳細情報を取得
     const { url, width, height } = await getImageDetails(imageData, mimeType);
 
+    const imgEl = document.createElement("img");
     imgEl.src = url;
     imgEl.width = width;
     imgEl.height = height;
     imgEl.loading = "lazy";
 
-    const figureEl = document.createElement("figure");
-    const divEl = document.createElement("div");
+    const imageCard = document.createElement("image-card");
+    console.log({ imagePath });
+    imageCard.setAttribute("src", url);
+    imageCard.setAttribute("width", width.toString());
+    imageCard.setAttribute("height", height.toString());
+    imgEl.slot = "image";
+    imageCard.appendChild(imgEl);
 
-    const BASE_WIDTH_PX = 320;
-    const MAX_HEIGHT_PX = 500;
-    const flexBasisPx = Math.floor((width / height) * BASE_WIDTH_PX);
-    const maxWidthPx = Math.floor((width / height) * MAX_HEIGHT_PX);
-
-    divEl.classList.add("has-background-primary-15");
-    divEl.style.flex = `1 1 ${flexBasisPx}px`;
-
-    figureEl.style.width = "100%";
-    figureEl.style.height = "100%";
-    figureEl.style.display = "flex";
-    figureEl.style.justifyContent = "center";
-    figureEl.style.backgroundColor = "cyan";
-
-    imgEl.style.width = "100%";
-    imgEl.style.height = "100%";
-    imgEl.style.objectFit = "cover";
-    imgEl.style.maxWidth = `${maxWidthPx}px`;
-
-    figureEl.appendChild(imgEl);
-    divEl.appendChild(figureEl);
-    document.querySelector("div.is-flex")!.appendChild(divEl);
+    document.querySelector("div.is-flex")!.appendChild(imageCard);
   }
 </script>
