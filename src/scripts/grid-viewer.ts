@@ -43,7 +43,8 @@ class GridViewer extends HTMLElement {
 
     const dirEntries = await readDir(TARGET_DIR);
     const imageEntries = dirEntries.filter(
-      (entry) => entry.isFile && /\.(jpg|jpeg|png|webp|gif)$/i.test(entry.name)
+      (entry) =>
+        entry.isFile && /\.(jpg|jpeg|png|webp|gif|avif)$/i.test(entry.name)
     );
 
     const imageFullPaths = await Promise.all(
