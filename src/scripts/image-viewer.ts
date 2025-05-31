@@ -11,23 +11,36 @@ class ImageViewer extends HTMLElement {
   currentImagePath!: string;
 
   connectedCallback() {
+    const urlParams = new URLSearchParams(window.location.search);
+    console.log({
+      "urlParams.get('imageFullPath')": urlParams.get("imageFullPath"),
+    });
+    const imageFullPath = urlParams.get("imageFullPath") || "";
+    console.log({ imageFullPath });
+
     // プロパティの初期化
     this.uiContainerEl = this.querySelector("image-viewer-ui-container")!;
     this.imageContainerEl = this.querySelector("image-viewer-image-container")!;
 
-    // ファイル選択イベントのリスナーを登録
-    this.uiContainerEl.addEventListener(
-      "file-selected",
-      (event: CustomEvent<FileSelectedEventDetail>) => {
-        console.log({ fileSelectedEventDetail: event.detail });
-
-        this.currentImagePath = event.detail.filePaths[0];
-        this.showImage(this.currentImagePath);
-      }
-    );
-
     // キーボードショートカットのリスナーを登録
     document.addEventListener("keydown", this.handleKeyDown.bind(this));
+
+    if (imageFullPath) {
+      // すでに画像のパスが指定されている場合は、その画像を表示
+      this.showImage(imageFullPath);
+    } else {
+      // 画像のパスが指定されていない場合は、ファイル選択ダイアログを表示
+
+      // ファイル選択イベントのリスナーを登録
+      this.uiContainerEl.addEventListener(
+        "file-selected",
+        (event: CustomEvent<FileSelectedEventDetail>) => {
+          console.log({ fileSelectedEventDetail: event.detail });
+
+          this.showImage(event.detail.filePaths[0]);
+        }
+      );
+    }
   }
 
   // コンポーネントがDOMから削除されたときにイベントリスナーをクリーンアップ
@@ -41,6 +54,9 @@ class ImageViewer extends HTMLElement {
    */
   async showImage(filePath: string) {
     console.log({ showingImageFilePath: filePath });
+
+    this.currentImagePath = filePath;
+
     const imageData = await readFile(filePath);
 
     const blob = new Blob([imageData], { type: "image/jpeg" });
