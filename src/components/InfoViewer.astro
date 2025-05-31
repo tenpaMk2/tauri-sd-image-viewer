@@ -1,3 +1,7 @@
+---
+const TARGET_DIR = "/Users/tenpamk2/Downloads/";
+---
+
 <info-viewer class="p-4">
   <info-viewer-prompt>
     <p class="title is-4">Positive prompt</p>
@@ -19,7 +23,7 @@
     >Copy to clipboard❗️</button
   >
   <a href="/">/</a>
-  <a href="browser">browser</a>
+  <a href={`/browser?dir=${encodeURIComponent(TARGET_DIR)}`}>browser</a>
 </info-viewer>
 
 <script src="@scripts/info-viewer.ts"></script>

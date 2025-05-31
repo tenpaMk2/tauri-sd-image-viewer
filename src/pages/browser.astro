@@ -19,8 +19,9 @@ import SplitLayout from "@src-root/layouts/SplitLayout.astro";
   import { path } from "@tauri-apps/api";
   import { readDir, readFile } from "@tauri-apps/plugin-fs";
 
-  const TARGET_DIR = await path.downloadDir();
-  // const TARGET_DIR = "/Volumes/home/Photos/stable-diffusion-outputs/2025-05-31";
+  const urlParams = new URLSearchParams(window.location.search);
+  console.log({ "urlParams.get('dir')": urlParams.get("dir") });
+  const TARGET_DIR = urlParams.get("dir") || (await path.downloadDir());
 
   const detectImageMineType = async (
     filename: string
