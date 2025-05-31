@@ -2,25 +2,7 @@ import "@scripts/image-card";
 import type { ImageCard } from "@scripts/image-card";
 import { path } from "@tauri-apps/api";
 import { readDir, readFile } from "@tauri-apps/plugin-fs";
-
-const detectImageMineType = async (
-  filename: string
-): Promise<string | null> => {
-  const ext = (await path.extname(filename)).toLowerCase();
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "webp":
-      return "image/webp";
-    case "gif":
-      return "image/gif";
-    default:
-      return null;
-  }
-};
+import { detectImageMimeType, type MimeType } from "./mine-type";
 
 // 画像データからアスペクト比を取得する関数（最適化バージョン）
 const getImageDetails = (
@@ -84,8 +66,8 @@ class GridViewer extends HTMLElement {
 
   async updateImage(imageFullPath: string) {
     try {
-      const mimeType =
-        (await detectImageMineType(imageFullPath)) ?? "image/png";
+      const mimeType: MimeType =
+        (await detectImageMimeType(imageFullPath)) ?? "image/png";
       const imageData = await readFile(imageFullPath);
       // 画像の詳細情報を取得
       const { url, width, height } = await getImageDetails(imageData, mimeType);

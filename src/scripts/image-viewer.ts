@@ -4,6 +4,7 @@ import * as ExifParser from "./exif-parser";
 import type { FileSelectedEventDetail } from "./global";
 import type { ImageViewerImageContainer } from "./image-viewer-image-container";
 import type { ImageViewerUiContainer } from "./image-viewer-ui-container";
+import { detectImageMimeType, type MimeType } from "./mine-type";
 
 class ImageViewer extends HTMLElement {
   uiContainerEl!: ImageViewerUiContainer;
@@ -59,7 +60,10 @@ class ImageViewer extends HTMLElement {
 
     const imageData = await readFile(filePath);
 
-    const blob = new Blob([imageData], { type: "image/jpeg" });
+    const mimeType: MimeType =
+      (await detectImageMimeType(filePath)) ?? "image/jpeg";
+
+    const blob = new Blob([imageData], { type: mimeType });
     const url = URL.createObjectURL(blob);
 
     this.uiContainerEl.hide();
