@@ -1,0 +1,50 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  // 基本的にAstro側の設定に従う。Tauri的に必要なものだけ↓で上書き。
+  "compilerOptions": {
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    /* Alias */
+    "baseUrl": "${configDir}",
+    "paths": {
+      "@src-root/*": [
+        "src/*"
+      ],
+      "@assets/*": [
+        "src/assets/*"
+      ],
+      "@components/*": [
+        "src/components/*"
+      ],
+      "@content/*": [
+        "src/content/*"
+      ],
+      "@layouts/*": [
+        "src/layouts/*"
+      ],
+      "@libs/*": [
+        "src/libs/*"
+      ],
+      "@scripts/*": [
+        "src/scripts/*"
+      ],
+      "@pages/*": [
+        "src/pages/*"
+      ],
+      "@styles/*": [
+        "src/styles/*"
+      ]
+    }
+  },
+  "include": [
+    "${configDir}/.astro/types.d.ts",
+    "${configDir}/src/**/*"
+  ]
+}

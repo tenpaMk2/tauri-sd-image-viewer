@@ -1,0 +1,53 @@
+<info-viewer class="p-4">
+  <info-viewer-prompt>
+    <p class="title is-4">Positive prompt</p>
+    <div class="tags is-clipped">
+      <span class="tag is-skeleton">masterpiece</span>
+      <span class="tag is-skeleton">1girl</span>
+      <span class="tag is-skeleton">solo</span>
+      <span class="tag is-skeleton">red eyes</span>
+      <span class="tag is-skeleton">black hair</span>
+      <span class="tag is-skeleton">long hair</span>
+    </div>
+  </info-viewer-prompt>
+  <info-viewer-meta>
+    <p class="title is-4">Meta</p>
+    <div class="skeleton-block"></div>
+    <div class="is-hidden"></div>
+  </info-viewer-meta>
+  <button id="test-copy-button" class="button is-primary"
+    >Copy to clipboard❗️</button
+  >
+  <a href="/">/</a>
+  <a href="browser">browser</a>
+</info-viewer>
+
+<script src="@scripts/info-viewer.ts"></script>
+
+<style>
+  info-viewer-prompt > div {
+    max-height: 10rem;
+  }
+</style>
+
+<script>
+  import { path } from "@tauri-apps/api";
+  import { invoke } from "@tauri-apps/api/core";
+
+  const buttonEl =
+    document.querySelector<HTMLButtonElement>("#test-copy-button")!;
+
+  buttonEl.addEventListener("click", async () => {
+    const filesInDownloads = ["hoge.png", "fuga.png"] as const;
+    const downloadDir = await path.downloadDir();
+    const fullPaths = await Promise.all(
+      filesInDownloads.map((p) => path.join(downloadDir, p))
+    );
+
+    console.log({ fullPaths });
+    const result = await invoke("set_clipboard_files_objc2_appkit", {
+      paths: fullPaths,
+    });
+    console.log({ "set_clipboard_files_objc2_appkit result": result });
+  });
+</script>

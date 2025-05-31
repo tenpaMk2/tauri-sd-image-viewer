@@ -1,0 +1,17 @@
+---
+import ImageViewerImageContainer from "./ImageViewerImageContainer.astro";
+import ImageViewerUiContainer from "./ImageViewerUiContainer.astro";
+---
+
+<image-viewer class="is-flex is-justify-content-center is-align-items-center">
+  <ImageViewerUiContainer />
+  <ImageViewerImageContainer />
+</image-viewer>
+
+<style>
+  image-viewer {
+    height: 100%;
+  }
+</style>
+
+<script src="@scripts/image-viewer.ts"></script>
