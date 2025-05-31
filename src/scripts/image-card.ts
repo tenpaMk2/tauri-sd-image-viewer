@@ -5,7 +5,7 @@ export class ImageCard extends HTMLElement {
   readonly MAX_HEIGHT_PX = 500; // 最大の高さ
 
   static get observedAttributes() {
-    return ["src", "width", "height"];
+    return ["src", "width", "height", "href"];
   }
 
   constructor() {
@@ -14,18 +14,21 @@ export class ImageCard extends HTMLElement {
 
     // 初期レイアウトを設定
     this.shadowRoot!.innerHTML = `
-      <figure>
-        <img></img>
-      </figure>
+      <a>
+        <img />
+      </a>
 
       <style>
         ${resetCss}
 
         :host {
-          border: 1px solid grey;
-          flex: 1 1 var(--flex-basis, 320px);
+          aspect-ratio: 1 / 1;
+          border: 1px solid rgb(0 56 48);
+          border-radius: 8px;
+          overflow: hidden;
         }
-        figure {
+        a {
+          text-decoration: none;
           width: 100%;
           height: 100%;
           display: flex;
@@ -35,8 +38,14 @@ export class ImageCard extends HTMLElement {
         img {
           width: 100%;
           height: 100%;
-          object-fit: cover;
-          max-width: var(--max-width, 100%);
+          object-fit: contain;
+          background: repeating-linear-gradient(
+            45deg,
+            rgb(0 56 48),
+            rgb(0 56 48) 10px,
+            rgb(0 0 0 / 0) 10px,
+            rgb(0 0 0 / 0) 20px
+          );
         }
       </style>
     `;
@@ -49,6 +58,13 @@ export class ImageCard extends HTMLElement {
     if (name === "src") {
       const img = this.shadowRoot!.querySelector<HTMLImageElement>("img")!;
       img.src = newValue as string;
+      img.loading = "lazy";
+      return;
+    }
+
+    if (name === "href") {
+      const link = this.shadowRoot!.querySelector<HTMLAnchorElement>("a")!;
+      link.href = newValue as string;
       return;
     }
 
@@ -63,19 +79,8 @@ export class ImageCard extends HTMLElement {
     const height = parseInt(this.getAttribute("height") || "0", 10);
 
     if (!width || !height) {
-      // 幅または高さが設定されていない場合は、デフォルトのスタイルを適用
-      this.style.setProperty("--flex-basis", "1 1 10px");
-      this.style.setProperty("--max-width", "10px");
       return;
     }
-
-    const flexBasisPx = Math.floor((width / height) * this.BASE_WIDTH_PX);
-    const maxWidthPx = Math.floor((width / height) * this.MAX_HEIGHT_PX);
-
-    console.log({ flexBasisPx, maxWidthPx });
-
-    this.style.setProperty("--flex-basis", `${flexBasisPx}px`);
-    this.style.setProperty("--max-width", `${maxWidthPx}px`);
 
     const img = this.shadowRoot!.querySelector<HTMLImageElement>("img")!;
     img.width = width;

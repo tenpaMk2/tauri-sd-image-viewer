@@ -4,14 +4,16 @@ import SplitLayout from "@src-root/layouts/SplitLayout.astro";
 ---
 
 <SplitLayout>
-  <div class="is-flex is-flex-wrap-wrap has-background-info-15 p-2"></div>
+  <div class="custom-grid p-2"></div>
   <InfoViewer slot="side-pain" />
 </SplitLayout>
 
 <style>
-  div.is-flex {
+  div.custom-grid {
     width: 100%;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
   }
 </style>
 
@@ -90,20 +92,13 @@ import SplitLayout from "@src-root/layouts/SplitLayout.astro";
     // 画像の詳細情報を取得
     const { url, width, height } = await getImageDetails(imageData, mimeType);
 
-    const imgEl = document.createElement("img");
-    imgEl.src = url;
-    imgEl.width = width;
-    imgEl.height = height;
-    imgEl.loading = "lazy";
-
     const imageCard = document.createElement("image-card");
     console.log({ imagePath });
     imageCard.setAttribute("src", url);
     imageCard.setAttribute("width", width.toString());
     imageCard.setAttribute("height", height.toString());
-    imgEl.slot = "image";
-    imageCard.appendChild(imgEl);
+    imageCard.setAttribute("href", "/?image=" + encodeURIComponent(imagePath));
 
-    document.querySelector("div.is-flex")!.appendChild(imageCard);
+    document.querySelector("div.custom-grid")!.appendChild(imageCard);
   }
 </script>
