@@ -22,6 +22,7 @@ const TARGET_DIR = "/Users/tenpamk2/Downloads/";
   <button id="test-copy-button" class="button is-primary"
     >Copy to clipboard❗️</button
   >
+  <button id="test-write-button" class="button is-info">Write rating❗️</button>
   <a href="/">/</a>
   <a href={`/browser?dir=${encodeURIComponent(TARGET_DIR)}`}>browser</a>
 </info-viewer>
@@ -38,10 +39,10 @@ const TARGET_DIR = "/Users/tenpamk2/Downloads/";
   import { path } from "@tauri-apps/api";
   import { invoke } from "@tauri-apps/api/core";
 
-  const buttonEl =
+  const copyButtonEl =
     document.querySelector<HTMLButtonElement>("#test-copy-button")!;
 
-  buttonEl.addEventListener("click", async () => {
+  copyButtonEl.addEventListener("click", async () => {
     const filesInDownloads = ["hoge.png", "fuga.png"] as const;
     const downloadDir = await path.downloadDir();
     const fullPaths = await Promise.all(
@@ -53,5 +54,19 @@ const TARGET_DIR = "/Users/tenpamk2/Downloads/";
       paths: fullPaths,
     });
     console.log({ "set_clipboard_files_objc2_appkit result": result });
+  });
+
+  const writeButtonEl =
+    document.querySelector<HTMLButtonElement>("#test-write-button")!;
+  writeButtonEl.addEventListener("click", async () => {
+    try {
+      const result2 = await invoke("write_rating", {
+        path: "/Users/tenpamk2/hoge/1.png",
+        rating: 5,
+      });
+      console.log({ "write_rating result": result2 });
+    } catch (error) {
+      console.error("write_rating error:", error);
+    }
   });
 </script>
