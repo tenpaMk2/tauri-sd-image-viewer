@@ -14,6 +14,7 @@ class ImageViewer extends HTMLElement {
   uiContainerEl!: ImageViewerUiContainer;
   imageContainerEl!: ImageViewerImageContainer;
   currentImagePath!: string;
+  private currentImageUrl: string | null = null;
 
   connectedCallback() {
     // プロパティの初期化
@@ -52,6 +53,18 @@ class ImageViewer extends HTMLElement {
   // コンポーネントがDOMから削除されたときにイベントリスナーをクリーンアップ
   disconnectedCallback() {
     document.removeEventListener("keydown", this.handleKeyDown.bind(this));
+    // URLオブジェクトのクリーンアップ
+    this.cleanupCurrentImageUrl();
+  }
+
+  /**
+   * 現在の画像URLをクリーンアップする
+   */
+  private cleanupCurrentImageUrl() {
+    if (this.currentImageUrl) {
+      URL.revokeObjectURL(this.currentImageUrl);
+      this.currentImageUrl = null;
+    }
   }
 
   /**
@@ -61,6 +74,9 @@ class ImageViewer extends HTMLElement {
   async showImage(filePath: string) {
     console.log({ showingImageFilePath: filePath });
 
+    // 前の画像URLをクリーンアップ
+    this.cleanupCurrentImageUrl();
+
     this.currentImagePath = filePath;
 
     const imageData = await readFile(filePath);
@@ -69,10 +85,10 @@ class ImageViewer extends HTMLElement {
       (await detectImageMimeType(filePath)) ?? "image/jpeg";
 
     const blob = new Blob([imageData], { type: mimeType });
-    const url = URL.createObjectURL(blob);
+    this.currentImageUrl = URL.createObjectURL(blob);
 
     this.uiContainerEl.hide();
-    this.imageContainerEl.setSrc(url);
+    this.imageContainerEl.setSrc(this.currentImageUrl);
     this.imageContainerEl.show();
 
     ExifParser.parseAndEmit(imageData.buffer);
