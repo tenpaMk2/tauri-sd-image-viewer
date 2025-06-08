@@ -1,14 +1,10 @@
 import { path } from "@tauri-apps/api";
-import { readDir, readFile } from "@tauri-apps/plugin-fs";
-import * as ExifParser from "./exif-parser";
 import type { FileSelectedEventDetail } from "./global";
+import { loadImage } from "./image-loader";
+import * as ImageNavigator from "./image-navigator";
 import type { ImageViewerImageContainer } from "./image-viewer-image-container";
 import type { ImageViewerUiContainer } from "./image-viewer-ui-container";
-import {
-  detectImageMimeType,
-  SUPPORTED_IMAGE_EXTS,
-  type MimeType,
-} from "./mine-type";
+import { KeyboardHandler } from "./keyboard-handler";
 
 class ImageViewer extends HTMLElement {
   uiContainerEl!: ImageViewerUiContainer;
@@ -16,10 +12,18 @@ class ImageViewer extends HTMLElement {
   currentImagePath!: string;
   private currentImageUrl: string | null = null;
 
+  private keyboardHandler!: KeyboardHandler;
+
   connectedCallback() {
     // プロパティの初期化
     this.uiContainerEl = this.querySelector("image-viewer-ui-container")!;
     this.imageContainerEl = this.querySelector("image-viewer-image-container")!;
+
+    // 各種ハンドラーの初期化
+    this.keyboardHandler = new KeyboardHandler({
+      onPreviousImage: () => this.showPreviousImage(),
+      onNextImage: () => this.showNextImage(),
+    });
 
     // URLパラメータから画像のフルパスを取得
     const urlParams = new URLSearchParams(window.location.search);
@@ -30,7 +34,7 @@ class ImageViewer extends HTMLElement {
     console.log({ imageFullPath });
 
     // キーボードショートカットのリスナーを登録
-    document.addEventListener("keydown", this.handleKeyDown.bind(this));
+    this.keyboardHandler.attach();
 
     if (imageFullPath) {
       // すでに画像のパスが指定されている場合は、その画像を表示
@@ -52,7 +56,7 @@ class ImageViewer extends HTMLElement {
 
   // コンポーネントがDOMから削除されたときにイベントリスナーをクリーンアップ
   disconnectedCallback() {
-    document.removeEventListener("keydown", this.handleKeyDown.bind(this));
+    this.keyboardHandler?.detach();
     // URLオブジェクトのクリーンアップ
     this.cleanupCurrentImageUrl();
   }
@@ -72,69 +76,32 @@ class ImageViewer extends HTMLElement {
    * @param filePath 選択されたファイルのパス
    */
   async showImage(filePath: string) {
-    console.log({ showingImageFilePath: filePath });
+    try {
+      console.log({ showingImageFilePath: filePath });
 
-    // 前の画像URLをクリーンアップ
-    this.cleanupCurrentImageUrl();
+      // 前の画像URLをクリーンアップ
+      this.cleanupCurrentImageUrl();
 
-    this.currentImagePath = filePath;
+      this.currentImagePath = filePath;
 
-    const imageData = await readFile(filePath);
+      const imageData = await loadImage(filePath);
+      this.currentImageUrl = imageData.url;
 
-    const mimeType: MimeType =
-      (await detectImageMimeType(filePath)) ?? "image/jpeg";
-
-    const blob = new Blob([imageData], { type: mimeType });
-    this.currentImageUrl = URL.createObjectURL(blob);
-
-    this.uiContainerEl.hide();
-    this.imageContainerEl.setSrc(this.currentImageUrl);
-    this.imageContainerEl.show();
-
-    ExifParser.parseAndEmit(imageData.buffer);
+      this.uiContainerEl.hide();
+      this.imageContainerEl.setSrc(imageData.url);
+      this.imageContainerEl.show();
+    } catch (error) {
+      console.error("Failed to show image:", error);
+      // エラー処理（将来的にユーザーに通知）
+    }
   }
 
   /**
    * キーボードイベントを処理する
    */
-  handleKeyDown(event: KeyboardEvent) {
-    // フォーカスされている要素がテキスト入力欄かどうかをチェック
-    const activeElement = document.activeElement;
-    const isInputActive =
-      activeElement instanceof HTMLInputElement ||
-      activeElement instanceof HTMLTextAreaElement ||
-      (activeElement instanceof HTMLElement && activeElement.isContentEditable);
-
-    // テキスト入力欄がフォーカスされている場合は処理しない
-    if (isInputActive) {
-      return;
-    }
-
-    // カーソルキーの処理
-    switch (event.key) {
-      case "ArrowLeft":
-        // 左キーの処理
-        console.log({ keyPressed: event.key });
-        event.preventDefault(); // デフォルトのスクロール動作を防止
-        this.showPreviousImage();
-        break;
-      case "ArrowRight":
-        // 右キーの処理
-        console.log({ keyPressed: event.key });
-        event.preventDefault();
-        this.showNextImage();
-        break;
-      case "ArrowUp":
-        // 上キーの処理
-        console.log({ keyPressed: event.key });
-        event.preventDefault();
-        break;
-      case "ArrowDown":
-        // 下キーの処理
-        console.log({ keyPressed: event.key });
-        event.preventDefault();
-        break;
-    }
+  handleKeyDown(_event: KeyboardEvent) {
+    // このメソッドは KeyboardHandler に移動済み
+    // 互換性のため残していますが、実際の処理は KeyboardHandler で行われます
   }
 
   /**
@@ -146,16 +113,7 @@ class ImageViewer extends HTMLElement {
     }
 
     const dir = await path.dirname(this.currentImagePath);
-    const dirEntries = await readDir(dir);
-    const imageEntries = dirEntries.filter(
-      (entry) =>
-        entry.isFile &&
-        SUPPORTED_IMAGE_EXTS.some((ext) =>
-          entry.name.toLowerCase().endsWith(`.${ext}`)
-        )
-    );
-
-    return imageEntries.map((entry) => entry.name).sort();
+    return await ImageNavigator.loadImageFilesInDirectory(dir);
   }
 
   /**
@@ -168,39 +126,14 @@ class ImageViewer extends HTMLElement {
       return;
     }
 
-    const dir = await path.dirname(this.currentImagePath);
-    const imageFilenames = await this.loadImageFilesInCurrentDirectory();
+    const newImagePath = await ImageNavigator.findImageInDirection(
+      this.currentImagePath,
+      direction
+    );
 
-    if (imageFilenames.length === 0) {
-      console.log("No images found in directory");
-      return;
+    if (newImagePath) {
+      await this.showImage(newImagePath);
     }
-
-    const currentBasename = await path.basename(this.currentImagePath);
-    const currentIndex = imageFilenames.indexOf(currentBasename);
-
-    if (currentIndex === -1) {
-      console.log("Current image not found in directory");
-      return;
-    }
-
-    // 次/前の画像のインデックスを計算（循環処理）
-    const newIndex =
-      direction === "next"
-        ? (currentIndex + 1) % imageFilenames.length
-        : (currentIndex - 1 + imageFilenames.length) % imageFilenames.length;
-
-    const newImagePath = await path.join(dir, imageFilenames[newIndex]);
-
-    console.log({
-      direction,
-      currentIndex,
-      newIndex,
-      currentImagePath: this.currentImagePath,
-      newImagePath,
-    });
-
-    this.showImage(newImagePath);
   }
 
   async showPreviousImage() {
