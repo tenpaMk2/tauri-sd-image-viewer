@@ -4,6 +4,15 @@
  */
 import { path } from "@tauri-apps/api";
 
+export const SUPPORTED_IMAGE_EXTS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "avif",
+] as const satisfies string[];
+
 export type MimeType =
   | "image/jpeg"
   | "image/png"
