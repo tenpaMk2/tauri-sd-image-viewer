@@ -3,6 +3,9 @@ export type KeyboardHandlerCallbacks = {
   onNextImage: () => void;
 };
 
+// DOM標準で定義されている実際のキー値
+type ArrowKeys = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
+
 export class KeyboardHandler {
   private callbacks: KeyboardHandlerCallbacks;
   private boundHandleKeyDown: (event: KeyboardEvent) => void;
@@ -47,7 +50,8 @@ export class KeyboardHandler {
       return;
     }
 
-    const keyActions: Record<string, () => void> = {
+    // 使用するキーのみを定義
+    const keyActions: Partial<Record<ArrowKeys, () => void>> = {
       ArrowLeft: () => {
         event.preventDefault();
         this.callbacks.onPreviousImage();
@@ -58,7 +62,7 @@ export class KeyboardHandler {
       },
     };
 
-    const action = keyActions[event.key];
+    const action = keyActions[event.key as ArrowKeys];
     if (action) {
       console.log({ keyPressed: event.key });
       action();
