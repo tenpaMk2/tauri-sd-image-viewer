@@ -1,3 +1,5 @@
+import { path } from "@tauri-apps/api";
+import type { OpenBrowserEventDetail } from "./global";
 import { loadImage } from "./image-loader";
 import * as ImageNavigator from "./image-navigator";
 import { KeyboardHandler } from "./keyboard-handler";
@@ -17,6 +19,21 @@ class ImageViewer extends HTMLElement {
       onPreviousImage: () => this.showPreviousImage(),
       onNextImage: () => this.showNextImage(),
     });
+    document.addEventListener(
+      "navigate-to-previous",
+      this.showPreviousImage.bind(this)
+    );
+    document.addEventListener(
+      "navigate-to-next",
+      this.showNextImage.bind(this)
+    );
+    document.addEventListener("open-browser-from-viewer", async () =>
+      document.dispatchEvent(
+        new CustomEvent<OpenBrowserEventDetail>("open-browser", {
+          detail: { dir: await path.dirname(this.currentImagePath) },
+        })
+      )
+    );
 
     // URLパラメータから画像のフルパスを取得
     const urlParams = new URLSearchParams(window.location.search);

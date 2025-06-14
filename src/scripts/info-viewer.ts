@@ -1,5 +1,5 @@
-import * as ExifParser from "./exif-parser";
 import type { ExifParsedEventDetail } from "./global";
+import { SdParameterParser, type SdTag } from "./sd-parameter-parser";
 
 class InfoViewerPrompt extends HTMLElement {
   containerEl!: HTMLElement;
@@ -8,7 +8,7 @@ class InfoViewerPrompt extends HTMLElement {
     this.containerEl = this.querySelector("div")!;
   }
 
-  updateTags(sdTags: ExifParser.SdTag[]) {
+  updateTags(sdTags: SdTag[]) {
     this.containerEl.classList.remove("skeleton-block");
 
     const tagEls = sdTags.map((tag) => {
@@ -59,7 +59,7 @@ class InfoViewer extends HTMLElement {
 
     console.log(event.detail.tagInfo.parameters?.value);
 
-    const sdParameters = await ExifParser.parseSdParameters(
+    const sdParameters = await SdParameterParser.parseSdParameters(
       event.detail.tagInfo.parameters?.value ?? ""
     );
 

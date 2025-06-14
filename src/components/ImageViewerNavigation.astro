@@ -1,0 +1,81 @@
+---
+import { Icon } from "astro-icon/components";
+---
+
+<!-- 中央ナビゲーション領域 -->
+<div class="is-flex-grow-1 columns">
+  <navigation-previous-button
+    class="enable-pointer-events column is-one-fifth is-relative is-clickable is-flex is-align-items-center is-justify-content-center"
+    title="前の画像"
+  >
+    <div class="is-overlay stripe"></div>
+    <span class="icon is-large has-text-light">
+      <Icon name="mage:arrow-left-circle-fill" size="100rem" />
+    </span>
+  </navigation-previous-button>
+  <div class="column"></div>
+  <navigation-next-button
+    class="enable-pointer-events column is-one-fifth is-relative is-clickable is-flex is-align-items-center is-justify-content-center"
+    title="次の画像"
+  >
+    <div class="is-overlay stripe"></div>
+    <span class="icon is-large has-text-light">
+      <Icon name="mage:arrow-right-circle-fill" size="100rem" />
+    </span>
+  </navigation-next-button>
+</div>
+
+<style>
+  .stripe {
+    background: repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / 1) 0rem,
+      rgb(255 255 255 / 1) 0.5rem,
+      rgb(255 255 255 / 0.5) 0.5rem,
+      rgb(255 255 255 / 0.5) 1rem
+    );
+    opacity: 0.1;
+    transition: opacity 0.2s ease;
+  }
+
+  .stripe:hover {
+    opacity: 0.2;
+  }
+
+  navigation-previous-button .icon,
+  navigation-next-button .icon {
+    transition: transform 0.2s ease;
+  }
+
+  navigation-previous-button:hover .icon,
+  navigation-next-button:hover .icon {
+    transform: scale(1.2);
+  }
+</style>
+
+<script>
+  import "@scripts/global";
+
+  class NavigationPreviousButton extends HTMLElement {
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick.bind(this));
+    }
+
+    handleClick() {
+      document.dispatchEvent(new CustomEvent("navigate-to-previous", {}));
+      console.log("Previous button clicked");
+    }
+  }
+  customElements.define("navigation-previous-button", NavigationPreviousButton);
+
+  class NavigationNextButton extends HTMLElement {
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick.bind(this));
+    }
+
+    handleClick() {
+      document.dispatchEvent(new CustomEvent("navigate-to-next", {}));
+    }
+  }
+  customElements.define("navigation-next-button", NavigationNextButton);
+</script>

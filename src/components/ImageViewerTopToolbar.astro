@@ -1,0 +1,78 @@
+---
+import { Icon } from "astro-icon/components";
+---
+
+<!-- 上部ツールバー -->
+<div
+  class="top-toolbar enable-pointer-events is-flex is-justify-content-center"
+>
+  <div class="level">
+    <div class="level-item">
+      <div class="buttons has-text-white">
+        <open-file-button class="button is-rounded" title="ファイルを開く">
+          <span class="icon">
+            <Icon name="mage:image" size="1.25em" />
+          </span>
+        </open-file-button>
+        <open-browser-button class="button is-rounded" title="ブラウザーを開く">
+          <span class="icon">
+            <Icon name="mage:dashboard" size="1.25em" />
+          </span>
+        </open-browser-button>
+        <copy-to-clipboard-button
+          class="button is-rounded"
+          title="画像をクリップボードへコピー"
+        >
+          <span class="icon">
+            <Icon name="mage:clipboard-2" size="1.25em" />
+          </span>
+        </copy-to-clipboard-button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .top-toolbar {
+    height: var(--toolbar-height);
+    background: var(--toolbar-background-color);
+  }
+</style>
+
+<script>
+  import "@scripts/global";
+
+  class OpenFileButton extends HTMLElement {
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick.bind(this));
+    }
+
+    handleClick() {
+      document.dispatchEvent(new CustomEvent("navigate-to-previous", {}));
+      console.log("Previous button clicked");
+    }
+  }
+  customElements.define("open-file-button", OpenFileButton);
+
+  class OpenBrowserButton extends HTMLElement {
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick.bind(this));
+    }
+
+    handleClick() {
+      document.dispatchEvent(new CustomEvent("open-browser-from-viewer", {}));
+    }
+  }
+  customElements.define("open-browser-button", OpenBrowserButton);
+
+  class CopyToClipboardButton extends HTMLElement {
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick.bind(this));
+    }
+
+    handleClick() {
+      document.dispatchEvent(new CustomEvent("copy-to-clipboard", {}));
+    }
+  }
+  customElements.define("copy-to-clipboard-button", CopyToClipboardButton);
+</script>
