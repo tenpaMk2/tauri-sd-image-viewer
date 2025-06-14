@@ -1,9 +1,12 @@
 ---
-
+import ImageViewerOverlay from "./ImageViewerOverlay.astro";
 ---
 
-<image-viewer class="is-flex is-justify-content-center is-align-items-center">
+<image-viewer
+  class="is-relative is-flex is-justify-content-center is-align-items-center"
+>
   <img />
+  <ImageViewerOverlay />
 </image-viewer>
 
 <style>
