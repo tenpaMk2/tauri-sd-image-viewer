@@ -1,7 +1,3 @@
-export type FileSelectedEventDetail = {
-  filePaths: string[];
-};
-
 export type ExifParsedEventDetail = {
   tagInfo: ExifReader.Tags & {
     parameters?: {
@@ -12,10 +8,6 @@ export type ExifParsedEventDetail = {
 };
 
 declare global {
-  interface HTMLElementEventMap {
-    "file-selected": CustomEvent<FileSelectedEventDetail>;
-  }
-
   interface DocumentEventMap {
     "exif-parsed": CustomEvent<ExifParsedEventDetail>;
   }

@@ -1,23 +1,16 @@
-import { path } from "@tauri-apps/api";
-import type { FileSelectedEventDetail } from "./global";
 import { loadImage } from "./image-loader";
 import * as ImageNavigator from "./image-navigator";
-import type { ImageViewerImageContainer } from "./image-viewer-image-container";
-import type { ImageViewerUiContainer } from "./image-viewer-ui-container";
 import { KeyboardHandler } from "./keyboard-handler";
 
 class ImageViewer extends HTMLElement {
-  uiContainerEl!: ImageViewerUiContainer;
-  imageContainerEl!: ImageViewerImageContainer;
+  imgEl!: HTMLImageElement;
   currentImagePath!: string;
   private currentImageUrl: string | null = null;
 
   private keyboardHandler!: KeyboardHandler;
 
   connectedCallback() {
-    // プロパティの初期化
-    this.uiContainerEl = this.querySelector("image-viewer-ui-container")!;
-    this.imageContainerEl = this.querySelector("image-viewer-image-container")!;
+    this.imgEl = this.querySelector("img")!;
 
     // 各種ハンドラーの初期化
     this.keyboardHandler = new KeyboardHandler({
@@ -36,22 +29,7 @@ class ImageViewer extends HTMLElement {
     // キーボードショートカットのリスナーを登録
     this.keyboardHandler.attach();
 
-    if (imageFullPath) {
-      // すでに画像のパスが指定されている場合は、その画像を表示
-      this.showImage(imageFullPath);
-    } else {
-      // 画像のパスが指定されていない場合は、ファイル選択ダイアログを表示
-
-      // ファイル選択イベントのリスナーを登録
-      this.uiContainerEl.addEventListener(
-        "file-selected",
-        (event: CustomEvent<FileSelectedEventDetail>) => {
-          console.log({ fileSelectedEventDetail: event.detail });
-
-          this.showImage(event.detail.filePaths[0]);
-        }
-      );
-    }
+    this.showImage(imageFullPath);
   }
 
   // コンポーネントがDOMから削除されたときにイベントリスナーをクリーンアップ
@@ -87,33 +65,11 @@ class ImageViewer extends HTMLElement {
       const imageData = await loadImage(filePath);
       this.currentImageUrl = imageData.url;
 
-      this.uiContainerEl.hide();
-      this.imageContainerEl.setSrc(imageData.url);
-      this.imageContainerEl.show();
+      this.imgEl.src = imageData.url;
     } catch (error) {
       console.error("Failed to show image:", error);
       // エラー処理（将来的にユーザーに通知）
     }
-  }
-
-  /**
-   * キーボードイベントを処理する
-   */
-  handleKeyDown(_event: KeyboardEvent) {
-    // このメソッドは KeyboardHandler に移動済み
-    // 互換性のため残していますが、実際の処理は KeyboardHandler で行われます
-  }
-
-  /**
-   * 同じディレクトリ内の画像ファイル一覧を読み込む
-   */
-  async loadImageFilesInCurrentDirectory(): Promise<string[]> {
-    if (!this.currentImagePath) {
-      return [];
-    }
-
-    const dir = await path.dirname(this.currentImagePath);
-    return await ImageNavigator.loadImageFilesInDirectory(dir);
   }
 
   /**
@@ -122,7 +78,7 @@ class ImageViewer extends HTMLElement {
    */
   async navigateImage(direction: "previous" | "next") {
     if (!this.currentImagePath) {
-      console.log("No image path available");
+      console.error("No image path available");
       return;
     }
 
@@ -132,7 +88,7 @@ class ImageViewer extends HTMLElement {
     );
 
     if (newImagePath) {
-      await this.showImage(newImagePath);
+      window.location.href = `/view?imageFullPath=${encodeURIComponent(newImagePath)}`;
     }
   }
 
