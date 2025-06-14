@@ -9,16 +9,24 @@ import { Icon } from "astro-icon/components";
   <div class="level">
     <div class="level-item">
       <div class="buttons has-text-white">
-        <open-file-button class="button is-rounded" title="ファイルを開く">
-          <span class="icon">
-            <Icon name="mage:image" size="1.25em" />
-          </span>
-        </open-file-button>
         <open-browser-button class="button is-rounded" title="ブラウザーを開く">
           <span class="icon">
             <Icon name="mage:dashboard" size="1.25em" />
           </span>
         </open-browser-button>
+        <open-image-button class="button is-rounded" title="画像を開く">
+          <span class="icon">
+            <Icon name="mage:image" size="1.25em" />
+          </span>
+        </open-image-button>
+        <open-directories-button
+          class="button is-rounded"
+          title="ディレクトリーを開く"
+        >
+          <span class="icon">
+            <Icon name="mage:folder" size="1.25em" />
+          </span>
+        </open-directories-button>
         <copy-to-clipboard-button
           class="button is-rounded"
           title="画像をクリップボードへコピー"
@@ -42,18 +50,6 @@ import { Icon } from "astro-icon/components";
 <script>
   import "@scripts/global";
 
-  class OpenFileButton extends HTMLElement {
-    connectedCallback() {
-      this.addEventListener("click", this.handleClick.bind(this));
-    }
-
-    handleClick() {
-      document.dispatchEvent(new CustomEvent("navigate-to-previous", {}));
-      console.log("Previous button clicked");
-    }
-  }
-  customElements.define("open-file-button", OpenFileButton);
-
   class OpenBrowserButton extends HTMLElement {
     connectedCallback() {
       this.addEventListener("click", this.handleClick.bind(this));
@@ -64,6 +60,30 @@ import { Icon } from "astro-icon/components";
     }
   }
   customElements.define("open-browser-button", OpenBrowserButton);
+
+  class OpenImageButton extends HTMLElement {
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick.bind(this));
+    }
+
+    handleClick() {
+      document.dispatchEvent(new CustomEvent("open-image-selector-dialog", {}));
+    }
+  }
+  customElements.define("open-image-button", OpenImageButton);
+
+  class OpenDirectoriesButton extends HTMLElement {
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick.bind(this));
+    }
+
+    handleClick() {
+      document.dispatchEvent(
+        new CustomEvent("open-directories-selector-dialog", {})
+      );
+    }
+  }
+  customElements.define("open-directories-button", OpenDirectoriesButton);
 
   class CopyToClipboardButton extends HTMLElement {
     connectedCallback() {

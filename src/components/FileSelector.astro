@@ -15,4 +15,16 @@
   }
 </style>
 
-<script src="@scripts/file-selector.ts"></script>
+<script>
+  export class FileSelector extends HTMLElement {
+    connectedCallback() {
+      const inputEl = document.querySelector("input")!;
+
+      inputEl.addEventListener("click", async (e) => {
+        e.preventDefault();
+        document.dispatchEvent(new CustomEvent("open-image-selector-dialog"));
+      });
+    }
+  }
+  customElements.define("file-selector", FileSelector);
+</script>
