@@ -21,11 +21,117 @@ import ImageViewerTopToolbar from "./ImageViewerTopToolbar.astro";
 
   /* オーバーレイ全体のラッパー */
   .ui-overlay {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .ui-overlay:hover {
     opacity: 1;
+    transition: opacity var(--transition-duration, 0.3s) ease;
   }
 </style>
+
+<script>
+  enum OverlayState {
+    VISIBLE = "visible",
+    HIDDEN = "hidden",
+    FADING_IN = "fading-in",
+    FADING_OUT = "fading-out",
+  }
+
+  class OverlayStateMachine {
+    private static readonly TRANSITION_DURATION_MS = 300; // ms
+    private static readonly FADE_DELAY_MS = 2000; // ms
+
+    private overlay: HTMLElement;
+    private fadeOutTimer: NodeJS.Timeout | null = null;
+    private state = OverlayState.VISIBLE;
+
+    constructor(overlay: HTMLElement) {
+      if (!overlay) {
+        throw new Error("Overlay element is required");
+      }
+      this.overlay = overlay;
+      // CSS変数に値を設定
+      overlay.style.setProperty(
+        "--transition-duration",
+        `${OverlayStateMachine.TRANSITION_DURATION_MS}ms`
+      );
+      this.initialize();
+    }
+
+    private initialize = () => {
+      // ページ読み込み後：2秒表示してフェードアウト
+      this.setFadeOutTimer(OverlayStateMachine.FADE_DELAY_MS);
+
+      // マウスホバー時
+      this.overlay.addEventListener("mouseenter", this.handleMouseEnter);
+
+      // マウスアウト時
+      this.overlay.addEventListener("mouseleave", this.handleMouseLeave);
+    };
+
+    private handleMouseEnter = () => {
+      this.clearFadeOutTimer();
+      this.fadeIn();
+    };
+
+    private handleMouseLeave = () => {
+      // フェードイン中でも2秒後にフェードアウト
+      this.setFadeOutTimer(OverlayStateMachine.FADE_DELAY_MS);
+    };
+
+    private fadeIn = () => {
+      // すでに表示中またはフェードイン中なら何もしない
+      if (
+        this.state === OverlayState.VISIBLE ||
+        this.state === OverlayState.FADING_IN
+      ) {
+        return;
+      }
+
+      // HIDDEN または FADING_OUT からフェードイン
+      this.clearFadeOutTimer();
+      this.state = OverlayState.FADING_IN;
+      this.overlay.style.opacity = "1";
+
+      setTimeout(() => {
+        this.state = OverlayState.VISIBLE;
+      }, OverlayStateMachine.TRANSITION_DURATION_MS);
+    };
+
+    private fadeOut = () => {
+      if (this.state === OverlayState.HIDDEN) return;
+
+      this.state = OverlayState.FADING_OUT;
+      this.overlay.style.opacity = "0";
+
+      // フェードアウト完了後の処理
+      setTimeout(() => {
+        this.state = OverlayState.HIDDEN;
+      }, OverlayStateMachine.TRANSITION_DURATION_MS);
+    };
+
+    private setFadeOutTimer = (delay = OverlayStateMachine.FADE_DELAY_MS) => {
+      if (this.fadeOutTimer !== null) {
+        clearTimeout(this.fadeOutTimer);
+      }
+      this.fadeOutTimer = setTimeout(this.fadeOut, delay);
+    };
+
+    private clearFadeOutTimer = () => {
+      if (this.fadeOutTimer !== null) {
+        clearTimeout(this.fadeOutTimer);
+        this.fadeOutTimer = null;
+      }
+    };
+
+    public destroy = () => {
+      this.clearFadeOutTimer();
+      this.overlay.removeEventListener("mouseenter", this.handleMouseEnter);
+      this.overlay.removeEventListener("mouseleave", this.handleMouseLeave);
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const overlay = document.querySelector(".ui-overlay") as HTMLElement;
+    if (!overlay) return;
+
+    new OverlayStateMachine(overlay);
+  });
+</script>
