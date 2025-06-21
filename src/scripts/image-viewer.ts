@@ -11,29 +11,36 @@ class ImageViewer extends HTMLElement {
 
   private keyboardHandler!: KeyboardHandler;
 
+  // あとで `removeEventListener()` するためにアロー関数で定義
+  private showPreviousImage = async () => {
+    await this.navigateImage("previous");
+  };
+
+  private showNextImage = async () => {
+    await this.navigateImage("next");
+  };
+
+  private openBrowser = async () => {
+    document.dispatchEvent(
+      new CustomEvent<OpenBrowserEventDetail>("open-browser", {
+        detail: { dir: await path.dirname(this.currentImagePath) },
+      })
+    );
+  };
+
   connectedCallback() {
     this.imgEl = this.querySelector("img")!;
 
     // 各種ハンドラーの初期化
     this.keyboardHandler = new KeyboardHandler({
-      onPreviousImage: () => this.showPreviousImage(),
-      onNextImage: () => this.showNextImage(),
+      onPreviousImage: this.showPreviousImage,
+      onNextImage: this.showNextImage,
     });
-    document.addEventListener(
-      "navigate-to-previous",
-      this.showPreviousImage.bind(this)
-    );
-    document.addEventListener(
-      "navigate-to-next",
-      this.showNextImage.bind(this)
-    );
-    document.addEventListener("open-browser-from-viewer", async () =>
-      document.dispatchEvent(
-        new CustomEvent<OpenBrowserEventDetail>("open-browser", {
-          detail: { dir: await path.dirname(this.currentImagePath) },
-        })
-      )
-    );
+
+    // アロー関数なのでそのまま渡せる
+    document.addEventListener("navigate-to-previous", this.showPreviousImage);
+    document.addEventListener("navigate-to-next", this.showNextImage);
+    document.addEventListener("open-browser-from-viewer", this.openBrowser);
 
     // URLパラメータから画像のフルパスを取得
     const urlParams = new URLSearchParams(window.location.search);
@@ -52,6 +59,15 @@ class ImageViewer extends HTMLElement {
   // コンポーネントがDOMから削除されたときにイベントリスナーをクリーンアップ
   disconnectedCallback() {
     this.keyboardHandler?.detach();
+
+    // 他のイベントリスナーもクリーンアップ
+    document.removeEventListener(
+      "navigate-to-previous",
+      this.showPreviousImage
+    );
+    document.removeEventListener("navigate-to-next", this.showNextImage);
+    document.removeEventListener("open-browser-from-viewer", this.openBrowser);
+
     // URLオブジェクトのクリーンアップ
     this.cleanupCurrentImageUrl();
   }
@@ -107,14 +123,6 @@ class ImageViewer extends HTMLElement {
     if (newImagePath) {
       window.location.href = `/view?imageFullPath=${encodeURIComponent(newImagePath)}`;
     }
-  }
-
-  async showPreviousImage() {
-    await this.navigateImage("previous");
-  }
-
-  async showNextImage() {
-    await this.navigateImage("next");
   }
 }
 customElements.define("image-viewer", ImageViewer);
