@@ -1,7 +1,7 @@
 <info-viewer class="is-block p-4">
   <info-viewer-prompt>
     <p class="title is-4">Positive prompt</p>
-    <div class="tags is-clipped">
+    <div class="tags">
       <span class="tag is-skeleton">masterpiece</span>
       <span class="tag is-skeleton">1girl</span>
       <span class="tag is-skeleton">solo</span>
@@ -27,12 +27,6 @@
 </info-viewer>
 
 <script src="@scripts/info-viewer.ts"></script>
-
-<style>
-  info-viewer-prompt > div {
-    max-height: 10rem;
-  }
-</style>
 
 <script>
   import { path } from "@tauri-apps/api";
