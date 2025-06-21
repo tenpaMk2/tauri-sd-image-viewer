@@ -15,11 +15,15 @@
     <div class="skeleton-block"></div>
     <div class="is-hidden"></div>
   </info-viewer-meta>
-  <button id="test-copy-button" class="button is-primary"
+  <button id="test-copy-button" class="block button is-primary"
     >Copy to clipboard❗️</button
   >
-  <button id="test-write-button" class="button is-info">Write rating❗️</button>
-  <a href="/">/</a>
+  <button id="test-write-button" class="block button is-info"
+    >Write rating❗️</button
+  >
+  <button id="test-read-button" class="block button is-warning"
+    >Read from Rust</button
+  >
 </info-viewer>
 
 <script src="@scripts/info-viewer.ts"></script>
@@ -45,23 +49,36 @@
     );
 
     console.log({ fullPaths });
-    const result = await invoke("set_clipboard_files_objc2_appkit", {
+    const result = await invoke("set_clipboard_files", {
       paths: fullPaths,
     });
-    console.log({ "set_clipboard_files_objc2_appkit result": result });
+    console.log({ "set_clipboard_files result": result });
   });
 
   const writeButtonEl =
     document.querySelector<HTMLButtonElement>("#test-write-button")!;
   writeButtonEl.addEventListener("click", async () => {
     try {
-      const result2 = await invoke("write_rating", {
+      const result2 = await invoke("write_exif_image_rating", {
         path: "/Users/tenpamk2/hoge/1.png",
-        rating: 5,
+        rating: 1,
       });
-      console.log({ "write_rating result": result2 });
+      console.log({ "write_exif_image_rating result": result2 });
     } catch (error) {
-      console.error("write_rating error:", error);
+      console.error("write_exif_image_rating error:", error);
+    }
+  });
+
+  const readButtonEl =
+    document.querySelector<HTMLButtonElement>("#test-read-button")!;
+  readButtonEl.addEventListener("click", async () => {
+    try {
+      const result = await invoke("read_comprehensive_image_info", {
+        path: "/Users/tenpamk2/hoge/1.png",
+      });
+      console.log({ "read_comprehensive_image_info result": result });
+    } catch (error) {
+      console.error("read_comprehensive_image_info error:", error);
     }
   });
 </script>

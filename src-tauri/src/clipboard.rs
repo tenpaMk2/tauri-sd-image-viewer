@@ -10,7 +10,7 @@ use {
 /// macOS専用：指定されたファイルパスをクリップボードに書き込むTauriコマンド
 #[cfg(target_os = "macos")]
 #[tauri::command]
-pub fn set_clipboard_files_objc2_appkit(paths: Vec<String>) -> Result<(), String> {
+pub fn set_clipboard_files(paths: Vec<String>) -> Result<(), String> {
     // メモリ管理のためautoreleasepool内で処理
     autoreleasepool(|_| {
         println!(
@@ -64,6 +64,6 @@ pub fn set_clipboard_files_objc2_appkit(paths: Vec<String>) -> Result<(), String
 /// 非macOSプラットフォーム向けの互換性スタブ実装
 #[cfg(not(target_os = "macos"))]
 #[tauri::command]
-pub fn set_clipboard_files_objc2_appkit(paths: Vec<String>) -> Result<(), String> {
+pub fn set_clipboard_files(paths: Vec<String>) -> Result<(), String> {
     Err("この機能は現在macOSのみでサポートされています".to_string())
 }
