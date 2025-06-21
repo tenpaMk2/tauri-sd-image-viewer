@@ -1,11 +1,6 @@
-export type ExifParsedEventDetail = {
-  tagInfo: ExifReader.Tags & {
-    parameters?: {
-      value: string;
-      description: string;
-    };
-  };
-};
+import type { ComprehensiveImageInfo } from "./rust-synced-types";
+
+export type ReadImageInfoEventDetail = ComprehensiveImageInfo;
 
 export type OpenBrowserEventDetail = {
   dir: string;
@@ -17,7 +12,7 @@ export type OpenImageEventDetail = {
 
 declare global {
   interface DocumentEventMap {
-    "exif-parsed": CustomEvent<ExifParsedEventDetail>;
+    "read-image-info": CustomEvent<ReadImageInfoEventDetail>;
     "navigate-to-next": CustomEvent;
     "navigate-to-previous": CustomEvent;
     "open-browser": CustomEvent<OpenBrowserEventDetail>;

@@ -1,5 +1,9 @@
 import { path } from "@tauri-apps/api";
-import type { OpenBrowserEventDetail } from "./global";
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  OpenBrowserEventDetail,
+  ReadImageInfoEventDetail,
+} from "./global";
 import { loadImage } from "./image-loader";
 import * as ImageNavigator from "./image-navigator";
 import { KeyboardHandler } from "./keyboard-handler";
@@ -99,6 +103,11 @@ class ImageViewer extends HTMLElement {
       this.currentImageUrl = imageData.url;
 
       this.imgEl.src = imageData.url;
+
+      // 画像情報の取得（非同期で実行、画像表示をブロックしない）
+      this.loadImageMetadata(filePath).catch((error) => {
+        console.warn("Failed to load image metadata:", error);
+      });
     } catch (error) {
       console.error("Failed to show image:", error);
       // エラー処理（将来的にユーザーに通知）
@@ -122,6 +131,29 @@ class ImageViewer extends HTMLElement {
 
     if (newImagePath) {
       window.location.href = `/view?imageFullPath=${encodeURIComponent(newImagePath)}`;
+    }
+  }
+
+  /**
+   * 画像のメタデータを読み込む
+   */
+  private async loadImageMetadata(filePath: string) {
+    try {
+      const result: ReadImageInfoEventDetail = await invoke(
+        "read_comprehensive_image_info",
+        {
+          path: filePath,
+        }
+      );
+
+      console.log("Read image info:", result);
+
+      document.dispatchEvent(
+        new CustomEvent("read-image-info", { detail: result })
+      );
+    } catch (error) {
+      console.error("Failed to load image metadata:", error);
+      throw error;
     }
   }
 }

@@ -1,5 +1,5 @@
-import type { ExifParsedEventDetail } from "./global";
-import { SdParameterParser, type SdTag } from "./sd-parameter-parser";
+import type { ReadImageInfoEventDetail } from "./global";
+import type { SdTag } from "./rust-synced-types";
 
 class InfoViewerPrompt extends HTMLElement {
   containerEl!: HTMLElement;
@@ -15,7 +15,7 @@ class InfoViewerPrompt extends HTMLElement {
       const tagEl = document.createElement("span");
       tagEl.classList.add("tag");
 
-      if (tag.weight === undefined) {
+      if (tag.weight === null) {
         tagEl.textContent = tag.name;
       } else {
         tagEl.textContent = `(${tag.name}:${tag.weight})`;
@@ -23,6 +23,8 @@ class InfoViewerPrompt extends HTMLElement {
 
       return tagEl;
     });
+
+    console.debug({ tagElsLength: tagEls.length });
 
     this.containerEl.replaceChildren(...tagEls);
   }
@@ -51,31 +53,22 @@ class InfoViewer extends HTMLElement {
     this.promptEl = this.querySelector("info-viewer-prompt")!;
     this.metaEl = this.querySelector("info-viewer-meta")!;
 
-    document.addEventListener("exif-parsed", this.handleExifParsed.bind(this));
-  }
-
-  async handleExifParsed(event: CustomEvent<ExifParsedEventDetail>) {
-    console.log({ exifParsedEventDetail: event.detail });
-
-    console.log(event.detail.tagInfo.parameters?.value);
-
-    const sdParameters = await SdParameterParser.parseSdParameters(
-      event.detail.tagInfo.parameters?.value ?? ""
+    document.addEventListener(
+      "read-image-info",
+      this.handleReadImageInfo.bind(this)
     );
-
-    this.promptEl.updateTags(sdParameters.positiveSdTags);
   }
 
-  // generatePrompt(sdTags: ExifParser.SdTag[]) {
-  //   return sdTags
-  //     .map((tag) => {
-  //       if (tag.weight === undefined) {
-  //         return tag.name;
-  //       }
+  async handleReadImageInfo(event: CustomEvent<ReadImageInfoEventDetail>) {
+    console.log({ readImageInfoEventDetail: event.detail });
 
-  //       return `(${tag.name}:${tag.weight})`;
-  //     })
-  //     .join(", ");
-  // }
+    const sdParameters = event.detail.png_info.sd_parameters;
+
+    if (!sdParameters) {
+      console.warn("No SD parameters found in the image info.");
+    }
+
+    this.promptEl.updateTags(sdParameters?.positive_sd_tags ?? []);
+  }
 }
 customElements.define("info-viewer", InfoViewer);
