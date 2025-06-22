@@ -4305,6 +4305,7 @@ name = "tauri-app"
 version = "0.1.0"
 dependencies = [
  "little_exif",
+ "log",
  "objc2 0.6.1",
  "objc2-app-kit",
  "objc2-foundation 0.3.1",
