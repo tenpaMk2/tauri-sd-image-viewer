@@ -3,7 +3,7 @@
  * 何回コールされてもOK（冪等性あり）。
  */
 
-import { debug, error, info, trace, warn } from "@tauri-apps/plugin-log";
+import { debug, error, info, warn } from "@tauri-apps/plugin-log";
 
 const forwardConsole = (
   fnName: "log" | "debug" | "info" | "warn" | "error",
@@ -19,7 +19,7 @@ const forwardConsole = (
   };
 };
 
-forwardConsole("log", trace);
+forwardConsole("log", info); // Attach `log` to not `trace` but `info` level.
 forwardConsole("debug", debug);
 forwardConsole("info", info);
 forwardConsole("warn", warn);
