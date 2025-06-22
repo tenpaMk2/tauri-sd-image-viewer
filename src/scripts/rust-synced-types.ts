@@ -1,6 +1,15 @@
 /**
  * This file contains TypeScript type definitions that are synchronized with Rust code.
+ * I know `tauri-specta` but it's still experimental and not widely adopted.
  */
+
+export type FileSystemInfo = Readonly<{
+  filename: string;
+  parent_dir: string;
+  file_size_bytes: number;
+  file_creation_timestamp: number;
+  file_modified_timestamp: number;
+}>;
 
 export type SdTag = Readonly<{
   name: string;
@@ -19,6 +28,7 @@ export type SdParameters = Readonly<{
   model: string | null;
   denoising_strength: string | null;
   clip_skip: string | null;
+  raw: string;
 }>;
 
 export type PngImageInfo = Readonly<{
@@ -38,6 +48,7 @@ export type ExifImageInfo = Readonly<{
 }>;
 
 export type ComprehensiveImageInfo = Readonly<{
+  file_system_info: FileSystemInfo;
   png_info: PngImageInfo;
   exif_info: ExifImageInfo;
 }>;

@@ -1,20 +1,17 @@
+---
+import InfoViewerBasic from "./InfoViewerBasic.astro";
+import InfoViewerPrompt from "./InfoViewerPrompt.astro";
+import InfoViewerOther from "./InfoViewerOther.astro";
+import InfoViewerRaw from "./InfoViewerRaw.astro";
+---
+
 <info-viewer class="is-block p-4">
-  <info-viewer-prompt>
-    <p class="title is-4">Positive prompt</p>
-    <div class="tags">
-      <span class="tag is-skeleton">masterpiece</span>
-      <span class="tag is-skeleton">1girl</span>
-      <span class="tag is-skeleton">solo</span>
-      <span class="tag is-skeleton">red eyes</span>
-      <span class="tag is-skeleton">black hair</span>
-      <span class="tag is-skeleton">long hair</span>
-    </div>
-  </info-viewer-prompt>
-  <info-viewer-meta>
-    <p class="title is-4">Meta</p>
-    <div class="skeleton-block"></div>
-    <div class="is-hidden"></div>
-  </info-viewer-meta>
+  <InfoViewerBasic />
+  <InfoViewerPrompt promptType="positive" />
+  <InfoViewerPrompt promptType="negative" />
+  <InfoViewerOther />
+  <InfoViewerRaw />
+
   <button id="test-copy-button" class="block button is-primary"
     >Copy to clipboard❗️</button
   >
@@ -25,6 +22,27 @@
     >Read from Rust</button
   >
 </info-viewer>
+
+<style is:global>
+  /* Set `*` for increasing CSS specificity. */
+  info-viewer * {
+    --bulma-block-spacing: 1rem;
+    --bulma-table-cell-padding: 0.1rem 0.3rem;
+  }
+
+  info-viewer .table {
+    table-layout: fixed;
+    width: 100%;
+    word-break: break-all;
+  }
+
+  info-viewer .table th {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 30%;
+  }
+</style>
 
 <script src="@scripts/info-viewer.ts"></script>
 

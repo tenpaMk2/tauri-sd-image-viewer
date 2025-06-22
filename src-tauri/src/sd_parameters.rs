@@ -31,6 +31,7 @@ pub struct SdParameters {
     pub model: Option<String>,
     pub denoising_strength: Option<String>,
     pub clip_skip: Option<String>,
+    pub raw: String,
 }
 
 impl SdParameters {
@@ -179,6 +180,7 @@ impl SdParameters {
             model,
             denoising_strength,
             clip_skip,
+            raw: parameter.to_string(),
         })
     }
 }

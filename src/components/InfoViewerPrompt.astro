@@ -1,0 +1,41 @@
+---
+// TODO: プロンプトのコピーボタン。
+
+type Props = {
+  promptType?: "positive" | "negative";
+};
+
+const { promptType = "positive" } = Astro.props;
+const title = promptType === "positive" ? "Positive prompt" : "Negative prompt";
+---
+
+<info-viewer-prompt
+  class="is-block block is-clipped"
+  data-prompt-type={promptType}
+>
+  <p class="title is-4">{title}</p>
+  <div class="tags">
+    <span class="tag is-skeleton">masterpiece</span>
+    <span class="tag is-skeleton">1girl</span>
+    <span class="tag is-skeleton">solo</span>
+    <span class="tag is-skeleton">red eyes</span>
+    <span class="tag is-skeleton">black hair</span>
+    <span class="tag is-skeleton">long hair</span>
+  </div>
+</info-viewer-prompt>
+
+<style is:global>
+  info-viewer-prompt .tags > .tag {
+    padding-right: 0.3rem;
+    padding-left: 0.3rem;
+    font-size: 0.875rem;
+  }
+</style>
+
+<style>
+  info-viewer-prompt .tags {
+    gap: 0.3rem;
+  }
+</style>
+
+<script src="@scripts/info-viewer-prompt.ts"></script>

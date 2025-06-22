@@ -1,57 +1,25 @@
 import type { ReadImageInfoEventDetail } from "./global";
-import type { SdTag } from "./rust-synced-types";
-
-class InfoViewerPrompt extends HTMLElement {
-  containerEl!: HTMLElement;
-
-  connectedCallback() {
-    this.containerEl = this.querySelector("div")!;
-  }
-
-  updateTags(sdTags: SdTag[]) {
-    this.containerEl.classList.remove("skeleton-block");
-
-    const tagEls = sdTags.map((tag) => {
-      const tagEl = document.createElement("span");
-      tagEl.classList.add("tag");
-
-      if (tag.weight === null) {
-        tagEl.textContent = tag.name;
-      } else {
-        tagEl.textContent = `(${tag.name}:${tag.weight})`;
-      }
-
-      return tagEl;
-    });
-
-    console.debug({ tagElsLength: tagEls.length });
-
-    this.containerEl.replaceChildren(...tagEls);
-  }
-}
-customElements.define("info-viewer-prompt", InfoViewerPrompt);
-
-// TODO: 内容が同じなので、class定義は1つにして、 `.define()` を2回呼び出すようにするのを検討。
-class InfoViewerMeta extends HTMLElement {
-  textarea!: HTMLTextAreaElement;
-
-  connectedCallback() {
-    this.textarea = this.querySelector("textarea")!;
-  }
-
-  updateText(text: string) {
-    this.textarea.textContent = text;
-  }
-}
-customElements.define("info-viewer-meta", InfoViewerMeta);
+import type { InfoViewerBasic } from "./info-viewer-basic";
+import type { InfoViewerOther } from "./info-viewer-other";
+import type { InfoViewerPrompt } from "./info-viewer-prompt";
 
 class InfoViewer extends HTMLElement {
-  promptEl!: InfoViewerPrompt;
-  metaEl!: InfoViewerMeta;
+  basicEl!: InfoViewerBasic;
+  positivePromptEl!: InfoViewerPrompt;
+  negativePromptEl!: InfoViewerPrompt;
+  otherEl!: InfoViewerOther;
+  rawEl!: InfoViewerRaw;
 
   connectedCallback() {
-    this.promptEl = this.querySelector("info-viewer-prompt")!;
-    this.metaEl = this.querySelector("info-viewer-meta")!;
+    this.basicEl = this.querySelector("info-viewer-basic")!;
+    this.positivePromptEl = this.querySelector(
+      'info-viewer-prompt[data-prompt-type="positive"]'
+    )!;
+    this.negativePromptEl = this.querySelector(
+      'info-viewer-prompt[data-prompt-type="negative"]'
+    )!;
+    this.otherEl = this.querySelector("info-viewer-other")!;
+    this.rawEl = this.querySelector("info-viewer-raw")!;
 
     document.addEventListener(
       "read-image-info",
@@ -68,7 +36,11 @@ class InfoViewer extends HTMLElement {
       console.warn("No SD parameters found in the image info.");
     }
 
-    this.promptEl.updateTags(sdParameters?.positive_sd_tags ?? []);
+    this.basicEl.updateInfos(event.detail);
+    this.positivePromptEl.updateTags(sdParameters?.positive_sd_tags ?? []);
+    this.negativePromptEl.updateTags(sdParameters?.negative_sd_tags ?? []);
+    this.otherEl.updateInfos(sdParameters);
+    this.rawEl.updateRawText(sdParameters?.raw ?? "");
   }
 }
 customElements.define("info-viewer", InfoViewer);

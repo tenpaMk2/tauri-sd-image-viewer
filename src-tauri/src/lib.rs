@@ -1,5 +1,6 @@
 mod clipboard;
 mod exif_handler;
+mod file_system_handler;
 mod image_handler;
 mod image_types;
 mod png_handler;
