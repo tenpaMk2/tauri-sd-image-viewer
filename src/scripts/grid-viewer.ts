@@ -66,11 +66,11 @@ class GridViewer extends HTMLElement {
       this.imageMap.set(imageFullPath, imageCard);
     }
 
-    const promises = imageFullPaths.map(this.updateImage.bind(this));
+    const promises = imageFullPaths.map(this.updateImage);
     await Promise.all(promises);
   }
 
-  async updateImage(imageFullPath: string) {
+  updateImage = async (imageFullPath: string) => {
     try {
       const mimeType: MimeType =
         (await detectImageMimeType(imageFullPath)) ?? "image/png";
@@ -89,6 +89,6 @@ class GridViewer extends HTMLElement {
     } catch (error) {
       console.error(`Failed to load image: ${imageFullPath}`, error);
     }
-  }
+  };
 }
 customElements.define("grid-viewer", GridViewer);
