@@ -2,7 +2,11 @@ import "@scripts/image-card";
 import type { ImageCard } from "@scripts/image-card";
 import { path } from "@tauri-apps/api";
 import { readDir, readFile } from "@tauri-apps/plugin-fs";
-import { detectImageMimeType, type MimeType } from "./mine-type";
+import {
+  detectImageMimeType,
+  SUPPORTED_IMAGE_EXTS,
+  type MimeType,
+} from "./mine-type";
 
 // 画像データからアスペクト比を取得する関数（最適化バージョン）
 const getImageDetails = (
@@ -42,10 +46,11 @@ class GridViewer extends HTMLElement {
     const TARGET_DIR = urlParams.get("dir") || (await path.downloadDir());
 
     const dirEntries = await readDir(TARGET_DIR);
-    const imageEntries = dirEntries.filter(
-      (entry) =>
-        entry.isFile && /\.(jpg|jpeg|png|webp|gif|avif)$/i.test(entry.name)
-    );
+    const imageEntries = dirEntries.filter((entry) => {
+      if (!entry.isFile) return false;
+      const ext = entry.name.split(".").pop()?.toLowerCase();
+      return ext && SUPPORTED_IMAGE_EXTS.some((x) => x === ext);
+    });
 
     const imageFullPaths = await Promise.all(
       imageEntries
