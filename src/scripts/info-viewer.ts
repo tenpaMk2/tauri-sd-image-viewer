@@ -28,7 +28,8 @@ class InfoViewer extends HTMLElement {
   }
 
   async handleReadImageInfo(event: CustomEvent<ReadImageInfoEventDetail>) {
-    console.log({ readImageInfoEventDetail: event.detail });
+    console.log("Received 'read-image-info' event");
+    console.debug({ readImageInfoEventDetail: event.detail });
 
     const sdParameters = event.detail.png_info.sd_parameters;
 

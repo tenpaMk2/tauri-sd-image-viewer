@@ -146,7 +146,8 @@ class ImageViewer extends HTMLElement {
         }
       );
 
-      console.log("Read image info:", result);
+      console.log("Read image info");
+      console.debug({ result });
 
       document.dispatchEvent(
         new CustomEvent("read-image-info", { detail: result })
