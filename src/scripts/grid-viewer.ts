@@ -7,6 +7,7 @@ import {
   SUPPORTED_IMAGE_EXTS,
   type MimeType,
 } from "./mine-type";
+import { TaskQueue } from "./task-queue";
 
 // 画像データからアスペクト比を取得する関数（最適化バージョン）
 const getImageDetails = (
@@ -39,6 +40,9 @@ const getImageDetails = (
 
 class GridViewer extends HTMLElement {
   readonly imageMap = new Map<string, ImageCard>();
+  private imageLoadQueue = new TaskQueue(async (task) => {
+    await this.updateImage(task.id);
+  }, 1);
 
   async connectedCallback() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -64,10 +68,10 @@ class GridViewer extends HTMLElement {
       const imageCard = document.createElement("image-card") as ImageCard;
       this.appendChild(imageCard);
       this.imageMap.set(imageFullPath, imageCard);
-    }
 
-    const promises = imageFullPaths.map(this.updateImage);
-    await Promise.all(promises);
+      // キューにタスクを追加
+      this.imageLoadQueue.add({ id: imageFullPath });
+    }
   }
 
   updateImage = async (imageFullPath: string) => {
