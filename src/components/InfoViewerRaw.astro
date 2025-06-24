@@ -6,4 +6,28 @@
     readonly></textarea>
 </info-viewer-raw>
 
-<script src="@scripts/info-viewer-raw.ts"></script>
+<script>
+  import type { ReadImageInfoEventDetail } from "@scripts/global";
+
+  class InfoViewerRaw extends HTMLElement {
+    textarea!: HTMLTextAreaElement;
+
+    connectedCallback() {
+      this.textarea = this.querySelector("textarea")!;
+
+      document.addEventListener("read-image-info", this.handleReadImageInfo);
+    }
+
+    private handleReadImageInfo = (
+      event: CustomEvent<ReadImageInfoEventDetail>
+    ) => {
+      const sdParameters = event.detail.png_info.sd_parameters;
+      this.updateRawText(sdParameters?.raw ?? "");
+    };
+
+    updateRawText(text: string) {
+      this.textarea.textContent = text;
+    }
+  }
+  customElements.define("info-viewer-raw", InfoViewerRaw);
+</script>

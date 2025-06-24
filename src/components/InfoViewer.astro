@@ -41,11 +41,17 @@ import InfoViewerRaw from "./InfoViewerRaw.astro";
   }
 </style>
 
-<script src="@scripts/info-viewer.ts"></script>
-
 <script>
   import { path } from "@tauri-apps/api";
   import { invoke } from "@tauri-apps/api/core";
+
+  class InfoViewer extends HTMLElement {
+    connectedCallback() {
+      // 子コンポーネントが各自でイベントをリッスンするため、
+      // ここでは特に何もしない
+    }
+  }
+  customElements.define("info-viewer", InfoViewer);
 
   const copyButtonEl =
     document.querySelector<HTMLButtonElement>("#test-copy-button")!;

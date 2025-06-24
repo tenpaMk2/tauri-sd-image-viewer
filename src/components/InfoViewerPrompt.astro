@@ -38,4 +38,58 @@ const title = promptType === "positive" ? "Positive prompt" : "Negative prompt";
   }
 </style>
 
-<script src="@scripts/info-viewer-prompt.ts"></script>
+<script>
+  import type { ReadImageInfoEventDetail } from "@scripts/global";
+  import type { SdTag } from "@scripts/rust-synced-types";
+
+  export class InfoViewerPrompt extends HTMLElement {
+    containerEl!: HTMLElement;
+
+    connectedCallback() {
+      this.containerEl = this.querySelector("div")!;
+
+      document.addEventListener("read-image-info", this.handleReadImageInfo);
+    }
+
+    private handleReadImageInfo = (
+      event: CustomEvent<ReadImageInfoEventDetail>
+    ) => {
+      const sdParameters = event.detail.png_info.sd_parameters;
+      const promptType = this.getAttribute("data-prompt-type");
+
+      if (!sdParameters) {
+        console.warn("No SD parameters found in the image info.");
+        return;
+      }
+
+      if (promptType === "positive") {
+        this.updateTags(sdParameters.positive_sd_tags ?? []);
+      } else if (promptType === "negative") {
+        this.updateTags(sdParameters.negative_sd_tags ?? []);
+      }
+    };
+
+    updateTags(sdTags: SdTag[]) {
+      this.containerEl.classList.remove("skeleton-block");
+
+      const tagEls = sdTags.map((tag) => {
+        const tagEl = document.createElement("span");
+        tagEl.classList.add("tag");
+        tagEl.classList.add("is-primary");
+
+        if (tag.weight === null) {
+          tagEl.textContent = tag.name;
+        } else {
+          tagEl.textContent = `(${tag.name}:${tag.weight})`;
+        }
+
+        return tagEl;
+      });
+
+      console.debug({ tagElsLength: tagEls.length });
+
+      this.containerEl.replaceChildren(...tagEls);
+    }
+  }
+  customElements.define("info-viewer-prompt", InfoViewerPrompt);
+</script>
