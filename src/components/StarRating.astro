@@ -31,10 +31,12 @@ const ratings = Array.from({ length: maxRating }, (_, i) => i + 1);
 </star-rating>
 
 <script>
+  import { invoke } from "@tauri-apps/api/core";
   import type { ReadImageInfoEventDetail } from "../scripts/global";
 
   export class StarRating extends HTMLElement {
     starElements!: Array<{ fill: Element; empty: Element }>;
+    currentImagePath: string | null = null;
 
     connectedCallback() {
       // 星要素を一度だけ取得してキャッシュ
@@ -45,8 +47,40 @@ const ratings = Array.from({ length: maxRating }, (_, i) => i + 1);
         empty: button.querySelector('[data-star="empty"]')!,
       }));
 
+      // ボタンクリックイベントを追加
+      this.querySelectorAll("button[data-rating]").forEach((button) => {
+        button.addEventListener("click", this.handleStarClick);
+      });
+
+      // URLパラメータから現在の画像パスを取得
+      const urlParams = new URLSearchParams(window.location.search);
+      this.currentImagePath = urlParams.get("imageFullPath");
+
       document.addEventListener("read-image-info", this.handleReadImageInfo);
     }
+
+    private handleStarClick = async (event: Event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      const rating = parseInt(button.dataset.rating || "0");
+
+      if (!this.currentImagePath) {
+        console.warn("No image path available for rating");
+        return;
+      }
+
+      try {
+        await invoke("write_exif_image_rating", {
+          path: this.currentImagePath,
+          rating: rating,
+        });
+        console.log(`Rating ${rating} written to ${this.currentImagePath}`);
+
+        // 即座にUI更新
+        this.updateRatingDisplay(rating);
+      } catch (error) {
+        console.error("Failed to write rating:", error);
+      }
+    };
 
     private handleReadImageInfo = (
       event: CustomEvent<ReadImageInfoEventDetail>
