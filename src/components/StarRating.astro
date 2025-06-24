@@ -1,0 +1,75 @@
+---
+import { Icon } from "astro-icon/components";
+
+type Props = {
+  maxRating?: number;
+};
+
+const { maxRating = 5 } = Astro.props;
+const ratings = Array.from({ length: maxRating }, (_, i) => i + 1);
+---
+
+<star-rating class="buttons has-addons is-small has-text-white">
+  {
+    ratings.map((rating) => (
+      <button
+        class="button p-2"
+        data-rating={rating}
+        title={`Rating: ${rating}`}
+      >
+        <span class="icon">
+          <span data-star="fill" class="is-hidden">
+            <Icon name="mage:star-fill" size="1.0em" />
+          </span>
+          <span data-star="empty">
+            <Icon name="mage:star" size="1.0em" />
+          </span>
+        </span>
+      </button>
+    ))
+  }
+</star-rating>
+
+<script>
+  import type { ReadImageInfoEventDetail } from "../scripts/global";
+
+  export class StarRating extends HTMLElement {
+    starElements!: Array<{ fill: Element; empty: Element }>;
+
+    connectedCallback() {
+      // 星要素を一度だけ取得してキャッシュ
+      this.starElements = Array.from(
+        this.querySelectorAll("button[data-rating]")
+      ).map((button) => ({
+        fill: button.querySelector('[data-star="fill"]')!,
+        empty: button.querySelector('[data-star="empty"]')!,
+      }));
+
+      document.addEventListener("read-image-info", this.handleReadImageInfo);
+    }
+
+    private handleReadImageInfo = (
+      event: CustomEvent<ReadImageInfoEventDetail>
+    ) => {
+      const rating = event.detail.exif_info.rating;
+      this.updateRatingDisplay(rating ?? 0);
+    };
+
+    private updateRatingDisplay(rating: number) {
+      this.starElements.forEach((star, index) => {
+        const buttonRating = index + 1;
+
+        if (buttonRating <= rating) {
+          // 塗りつぶしの星を表示、空の星を非表示
+          star.fill.classList.remove("is-hidden");
+          star.empty.classList.add("is-hidden");
+        } else {
+          // 空の星を表示、塗りつぶしの星を非表示
+          star.fill.classList.add("is-hidden");
+          star.empty.classList.remove("is-hidden");
+        }
+      });
+    }
+  }
+  customElements.define("star-rating", StarRating);
+</script>

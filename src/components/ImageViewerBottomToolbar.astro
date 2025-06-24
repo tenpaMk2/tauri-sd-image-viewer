@@ -1,49 +1,36 @@
 ---
-import { Icon } from "astro-icon/components";
+import StarRating from "./StarRating.astro";
 ---
 
 <!-- 下部ツールバー -->
-<div
-  class="bottom-toolbar enable-pointer-events is-flex is-flex-direction-column is-justify-content-center"
+<image-viewer-bottom-toolbar
+  class="enable-pointer-events is-flex is-flex-direction-column is-justify-content-center"
 >
   <div class="columns">
     <div class="column is-1"></div>
     <div class="column is-10 is-flex is-justify-content-center">
-      <div class="buttons has-addons is-small has-text-white">
-        <button class="button p-2" data-rating="1" title="レーティング: 1">
-          <span class="icon">
-            <Icon name="mage:star-fill" size="1.0em" />
-          </span>
-        </button>
-        <button class="button p-2" data-rating="2" title="レーティング: 2">
-          <span class="icon">
-            <Icon name="mage:star-fill" size="1.0em" />
-          </span>
-        </button>
-        <button class="button p-2" data-rating="3" title="レーティング: 3">
-          <span class="icon">
-            <Icon name="mage:star-fill" size="1.0em" />
-          </span>
-        </button>
-        <button class="button p-2" data-rating="4" title="レーティング: 4">
-          <span class="icon">
-            <Icon name="mage:star" size="1.0em" />
-          </span>
-        </button>
-        <button class="button p-2" data-rating="5" title="レーティング: 5">
-          <span class="icon">
-            <Icon name="mage:star" size="1.0em" />
-          </span>
-        </button>
-      </div>
+      <StarRating />
     </div>
     <div class="column is-1"></div>
   </div>
-</div>
+</image-viewer-bottom-toolbar>
 
 <style>
-  .bottom-toolbar {
+  image-viewer-bottom-toolbar {
     height: var(--toolbar-height);
     background: var(--toolbar-background-color);
   }
 </style>
+
+<script>
+  class ImageViewerBottomToolbar extends HTMLElement {
+    connectedCallback() {
+      // StarRatingコンポーネントが自分でイベントをリッスンするため、
+      // ここでは特に何もしない
+    }
+  }
+  customElements.define(
+    "image-viewer-bottom-toolbar",
+    ImageViewerBottomToolbar
+  );
+</script>
