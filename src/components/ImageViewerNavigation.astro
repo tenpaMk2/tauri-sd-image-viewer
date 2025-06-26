@@ -3,23 +3,22 @@ import { Icon } from "astro-icon/components";
 ---
 
 <!-- 中央ナビゲーション領域 -->
-<div class="is-flex-grow-1 columns">
+<div class="is-flex-grow-1 is-flex is-justify-content-space-between">
   <navigation-previous-button
-    class="enable-pointer-events column is-one-fifth is-relative is-clickable is-flex is-align-items-center is-justify-content-center"
+    class="enable-pointer-events is-flex-grow-1 is-relative is-clickable is-flex is-align-items-center is-justify-content-center"
     title="前の画像"
   >
     <div class="is-overlay stripe"></div>
-    <span class="icon is-large has-text-light">
+    <span class="icon is-large has-text-light m-2">
       <Icon name="mage:arrow-left-circle-fill" size="100rem" />
     </span>
   </navigation-previous-button>
-  <div class="column"></div>
   <navigation-next-button
-    class="enable-pointer-events column is-one-fifth is-relative is-clickable is-flex is-align-items-center is-justify-content-center"
+    class="enable-pointer-events is-flex-grow-1 is-relative is-clickable is-flex is-align-items-center is-justify-content-center"
     title="次の画像"
   >
     <div class="is-overlay stripe"></div>
-    <span class="icon is-large has-text-light">
+    <span class="icon is-large has-text-light m-2">
       <Icon name="mage:arrow-right-circle-fill" size="100rem" />
     </span>
   </navigation-next-button>
@@ -40,6 +39,12 @@ import { Icon } from "astro-icon/components";
 
   .stripe:hover {
     opacity: 0.2;
+  }
+
+  navigation-previous-button,
+  navigation-next-button {
+    min-width: fit-content;
+    max-width: 6rem;
   }
 
   navigation-previous-button .icon,
