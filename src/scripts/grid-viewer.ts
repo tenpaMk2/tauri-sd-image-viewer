@@ -88,7 +88,7 @@ class GridViewer extends HTMLElement {
       imageCard.setAttribute("height", height.toString());
       imageCard.setAttribute(
         "href",
-        "view/?imageFullPath=" + encodeURIComponent(imageFullPath)
+        "view/?initialImagePath=" + encodeURIComponent(imageFullPath)
       );
     } catch (error) {
       console.error(`Failed to load image: ${imageFullPath}`, error);

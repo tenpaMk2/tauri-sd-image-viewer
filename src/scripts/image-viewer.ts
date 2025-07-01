@@ -46,12 +46,12 @@ class ImageViewer extends HTMLElement {
     document.addEventListener("navigate-to-next", this.showNextImage);
     document.addEventListener("open-browser-from-viewer", this.openBrowser);
 
-    // URLパラメータから画像のフルパスを取得
+    // URLパラメータから初期画像のフルパスを取得
     const urlParams = new URLSearchParams(window.location.search);
     console.log({
-      "urlParams.get('imageFullPath')": urlParams.get("imageFullPath"),
+      "urlParams.get('initialImagePath')": urlParams.get("initialImagePath"),
     });
-    const imageFullPath = urlParams.get("imageFullPath") || "";
+    const imageFullPath = urlParams.get("initialImagePath") || "";
     console.log({ imageFullPath });
 
     // キーボードショートカットのリスナーを登録
@@ -130,7 +130,7 @@ class ImageViewer extends HTMLElement {
     );
 
     if (newImagePath) {
-      window.location.href = `/view?imageFullPath=${encodeURIComponent(newImagePath)}`;
+      await this.showImage(newImagePath);
     }
   }
 

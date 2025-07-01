@@ -26,7 +26,7 @@ document.addEventListener(
 
     console.info("Navigating to image view with path:", imagePath);
 
-    window.location.href = `/view?imageFullPath=${encodeURIComponent(imagePath)}`;
+    window.location.href = `/view?initialImagePath=${encodeURIComponent(imagePath)}`;
   }
 );
 
