@@ -75,13 +75,13 @@ export const findImageInDirection = async (
 
     const newImagePath = await path.join(dir, imageFilenames[newIndex]);
 
-    console.log({
-      direction,
-      currentIndex,
-      newIndex,
-      currentImagePath,
-      newImagePath,
-    });
+    // console.log({
+    //   direction,
+    //   currentIndex,
+    //   newIndex,
+    //   currentImagePath,
+    //   newImagePath,
+    // });
 
     return newImagePath;
   } catch (error) {

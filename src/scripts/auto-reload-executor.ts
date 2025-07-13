@@ -15,7 +15,7 @@ export class AutoReloadExecutor {
       return;
     }
 
-    console.log("Starting auto reload executor");
+    console.log(`Starting auto reload executor with interval ${interval}ms`);
 
     // 即座に1回実行
     callback().catch(console.error);

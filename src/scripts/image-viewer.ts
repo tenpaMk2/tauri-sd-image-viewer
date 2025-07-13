@@ -11,6 +11,8 @@ import * as ImageNavigator from "./image-navigator";
 import { KeyboardHandler } from "./keyboard-handler";
 
 class ImageViewer extends HTMLElement {
+  readonly AUTO_RELOAD_INTERVAL = 2000; // 自動リロードの間隔（ミリ秒）
+
   imgEl!: HTMLImageElement;
   currentImagePath!: string;
   private currentImageUrl: string | null = null;
@@ -47,17 +49,21 @@ class ImageViewer extends HTMLElement {
   };
 
   private requestStartAutoReload = async () => {
+    console.log("Request to start auto reload");
+
     if (autoReloadStateManager.getState()) {
       console.warn("Auto reload is already active");
       return;
     }
 
     const callback = this.createAutoReloadCallback();
-    this.autoReloadExecutor.start(callback, 2000);
+    this.autoReloadExecutor.start(callback, this.AUTO_RELOAD_INTERVAL);
     autoReloadStateManager.start();
   };
 
   private requestStopAutoReload = async () => {
+    console.log("Request to stop auto reload");
+
     if (!autoReloadStateManager.getState()) {
       console.warn("Auto reload is not active");
       return;
