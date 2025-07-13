@@ -1,7 +1,6 @@
 import { path } from "@tauri-apps/api";
 import { invoke } from "@tauri-apps/api/core";
-import { AutoReloadExecutor } from "./auto-reload-executor";
-import { autoReloadStateManager } from "./auto-reload-state-manager";
+import { autoReloader } from "./auto-reloader";
 import type {
   OpenBrowserEventDetail,
   ReadImageInfoEventDetail,
@@ -11,14 +10,11 @@ import * as ImageNavigator from "./image-navigator";
 import { KeyboardHandler } from "./keyboard-handler";
 
 class ImageViewer extends HTMLElement {
-  readonly AUTO_RELOAD_INTERVAL = 2000; // 自動リロードの間隔（ミリ秒）
-
   imgEl!: HTMLImageElement;
   currentImagePath!: string;
   private currentImageUrl: string | null = null;
 
   private keyboardHandler!: KeyboardHandler;
-  private autoReloadExecutor = new AutoReloadExecutor();
 
   // あとで `removeEventListener()` するためにアロー関数で定義
   private showPreviousImage = async () => {
@@ -51,35 +47,24 @@ class ImageViewer extends HTMLElement {
   private requestStartAutoReload = async () => {
     console.log("Request to start auto reload");
 
-    if (autoReloadStateManager.getState()) {
+    if (autoReloader.getState()) {
       console.warn("Auto reload is already active");
       return;
     }
 
     const callback = this.createAutoReloadCallback();
-    this.autoReloadExecutor.start(callback, this.AUTO_RELOAD_INTERVAL);
-    autoReloadStateManager.start();
+    autoReloader.start(callback);
   };
 
   private requestStopAutoReload = async () => {
     console.log("Request to stop auto reload");
 
-    if (!autoReloadStateManager.getState()) {
+    if (!autoReloader.getState()) {
       console.warn("Auto reload is not active");
       return;
     }
 
-    this.autoReloadExecutor.stop();
-    autoReloadStateManager.stop();
-  };
-
-  private handleAutoReloadStateRequest = () => {
-    // 現在の状態を即座に通知
-    document.dispatchEvent(
-      new CustomEvent("auto-reload-state-changed", {
-        detail: { isActive: autoReloadStateManager.getState() },
-      })
-    );
+    autoReloader.stop();
   };
 
   connectedCallback() {
@@ -97,10 +82,6 @@ class ImageViewer extends HTMLElement {
     document.addEventListener("open-browser-from-viewer", this.openBrowser);
     document.addEventListener("auto-reload-start", this.requestStartAutoReload);
     document.addEventListener("auto-reload-stop", this.requestStopAutoReload);
-    document.addEventListener(
-      "request-auto-reload-state",
-      this.handleAutoReloadStateRequest
-    );
 
     // URLパラメータから初期画像のフルパスを取得
     const urlParams = new URLSearchParams(window.location.search);
@@ -135,14 +116,9 @@ class ImageViewer extends HTMLElement {
       "auto-reload-stop",
       this.requestStopAutoReload
     );
-    document.removeEventListener(
-      "request-auto-reload-state",
-      this.handleAutoReloadStateRequest
-    );
 
     // 自動リロードを停止
-    this.autoReloadExecutor.stop();
-    autoReloadStateManager.stop();
+    autoReloader.stop();
 
     // URLオブジェクトのクリーンアップ
     this.cleanupCurrentImageUrl();
@@ -199,10 +175,9 @@ class ImageViewer extends HTMLElement {
     }
 
     // 自動リロード停止の制御
-    if (options.stopAutoReload && autoReloadStateManager.getState()) {
+    if (options.stopAutoReload && autoReloader.getState()) {
       console.log("Stopping auto reload due to manual navigation");
-      this.autoReloadExecutor.stop();
-      autoReloadStateManager.stop();
+      autoReloader.stop();
     }
 
     const newImagePath = await ImageNavigator.findImageInDirection(
