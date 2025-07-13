@@ -14,6 +14,14 @@ export type AutoReloadStateEventDetail = {
   isActive: boolean;
 };
 
+export type ClipboardCopySuccessEventDetail = {
+  path: string;
+};
+
+export type ClipboardCopyFailedEventDetail = {
+  error: string;
+};
+
 declare global {
   interface DocumentEventMap {
     "read-image-info": CustomEvent<ReadImageInfoEventDetail>;
@@ -25,6 +33,8 @@ declare global {
     "open-image-selector-dialog": CustomEvent;
     "open-directories-selector-dialog": CustomEvent;
     "copy-to-clipboard": CustomEvent;
+    "clipboard-copy-success": CustomEvent<ClipboardCopySuccessEventDetail>;
+    "clipboard-copy-failed": CustomEvent<ClipboardCopyFailedEventDetail>;
     "auto-reload-start": CustomEvent;
     "auto-reload-stop": CustomEvent;
     "auto-reload-state-changed": CustomEvent<AutoReloadStateEventDetail>;

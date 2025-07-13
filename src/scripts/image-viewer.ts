@@ -33,6 +33,42 @@ class ImageViewer extends HTMLElement {
     );
   };
 
+  private copyToClipboard = async () => {
+    if (!this.currentImagePath) {
+      console.warn("No image path available for clipboard copy");
+      document.dispatchEvent(
+        new CustomEvent("clipboard-copy-failed", {
+          detail: { error: "No image path available" },
+        })
+      );
+      return;
+    }
+
+    try {
+      console.log("Copying image to clipboard:", this.currentImagePath);
+      const result = await invoke("set_clipboard_files", {
+        paths: [this.currentImagePath],
+      });
+      console.log("Image copied to clipboard successfully:", result);
+
+      // コピー成功を通知
+      document.dispatchEvent(
+        new CustomEvent("clipboard-copy-success", {
+          detail: { path: this.currentImagePath },
+        })
+      );
+    } catch (error) {
+      console.error("Failed to copy image to clipboard:", error);
+      document.dispatchEvent(
+        new CustomEvent("clipboard-copy-failed", {
+          detail: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+      );
+    }
+  };
+
   private createAutoReloadCallback = (): (() => Promise<void>) => {
     return async () => {
       if (!this.currentImagePath) {
@@ -80,6 +116,7 @@ class ImageViewer extends HTMLElement {
     document.addEventListener("navigate-to-previous", this.showPreviousImage);
     document.addEventListener("navigate-to-next", this.showNextImage);
     document.addEventListener("open-browser-from-viewer", this.openBrowser);
+    document.addEventListener("copy-to-clipboard", this.copyToClipboard);
     document.addEventListener("auto-reload-start", this.requestStartAutoReload);
     document.addEventListener("auto-reload-stop", this.requestStopAutoReload);
 
@@ -108,6 +145,7 @@ class ImageViewer extends HTMLElement {
     );
     document.removeEventListener("navigate-to-next", this.showNextImage);
     document.removeEventListener("open-browser-from-viewer", this.openBrowser);
+    document.removeEventListener("copy-to-clipboard", this.copyToClipboard);
     document.removeEventListener(
       "auto-reload-start",
       this.requestStartAutoReload

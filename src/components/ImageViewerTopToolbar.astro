@@ -32,7 +32,19 @@ import { Icon } from "astro-icon/components";
           title="画像をクリップボードへコピー"
         >
           <span class="icon">
-            <Icon name="mage:clipboard-2" size="1.25em" />
+            <Icon name="mage:clipboard-2" size="1.25em" data-state="idle" />
+            <Icon
+              name="mage:check-circle"
+              size="1.25em"
+              data-state="success"
+              class="is-hidden"
+            />
+            <Icon
+              name="mage:exclamation-circle"
+              size="1.25em"
+              data-state="error"
+              class="is-hidden"
+            />
           </span>
         </copy-to-clipboard-button>
         <auto-reload-latest-image-button
@@ -59,47 +71,141 @@ import { Icon } from "astro-icon/components";
   import "@scripts/global";
 
   class OpenBrowserButton extends HTMLElement {
-    connectedCallback() {
-      this.addEventListener("click", this.handleClick.bind(this));
-    }
-
-    handleClick() {
+    private handleClick = () => {
       document.dispatchEvent(new CustomEvent("open-browser-from-viewer", {}));
+    };
+
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick);
     }
   }
   customElements.define("open-browser-button", OpenBrowserButton);
 
   class OpenImageButton extends HTMLElement {
-    connectedCallback() {
-      this.addEventListener("click", this.handleClick.bind(this));
-    }
-
-    handleClick() {
+    private handleClick = () => {
       document.dispatchEvent(new CustomEvent("open-image-selector-dialog", {}));
+    };
+
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick);
     }
   }
   customElements.define("open-image-button", OpenImageButton);
 
   class OpenDirectoriesButton extends HTMLElement {
-    connectedCallback() {
-      this.addEventListener("click", this.handleClick.bind(this));
-    }
-
-    handleClick() {
+    private handleClick = () => {
       document.dispatchEvent(
         new CustomEvent("open-directories-selector-dialog", {})
       );
+    };
+
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick);
     }
   }
   customElements.define("open-directories-button", OpenDirectoriesButton);
 
   class CopyToClipboardButton extends HTMLElement {
+    readonly POPUP_DURATION = 1000; // ms
+
+    private handleClick = () => {
+      // コピー処理開始の視覚的フィードバック
+      this.showCopyingFeedback();
+
+      // ImageViewerにクリップボードコピーを依頼
+      document.dispatchEvent(new CustomEvent("copy-to-clipboard", {}));
+    };
+
+    private handleCopySuccess = (event: CustomEvent) => {
+      console.log("Copy success:", event.detail);
+      this.showCopySuccessFeedback();
+    };
+
+    private handleCopyFailed = (event: CustomEvent) => {
+      console.error("Copy failed:", event.detail);
+      this.showCopyFailedFeedback();
+    };
+
     connectedCallback() {
-      this.addEventListener("click", this.handleClick.bind(this));
+      this.addEventListener("click", this.handleClick);
+
+      // クリップボード関連のイベントをリッスンして視覚的フィードバック
+      document.addEventListener(
+        "clipboard-copy-success",
+        this.handleCopySuccess
+      );
+      document.addEventListener("clipboard-copy-failed", this.handleCopyFailed);
     }
 
-    handleClick() {
-      document.dispatchEvent(new CustomEvent("copy-to-clipboard", {}));
+    disconnectedCallback() {
+      document.removeEventListener(
+        "clipboard-copy-success",
+        this.handleCopySuccess
+      );
+      document.removeEventListener(
+        "clipboard-copy-failed",
+        this.handleCopyFailed
+      );
+    }
+
+    private showCopyingFeedback() {
+      this.setAttribute("title", "コピー中...");
+      this.showIconState("loading");
+    }
+
+    private showCopySuccessFeedback() {
+      this.setAttribute("title", "コピーしました！");
+      this.showIconState("success");
+
+      setTimeout(() => {
+        this.setAttribute("title", "画像をクリップボードへコピー");
+        this.showIconState("idle");
+      }, 1500);
+    }
+
+    private showCopyFailedFeedback() {
+      this.setAttribute("title", "コピーに失敗しました");
+      this.showIconState("error");
+
+      setTimeout(() => {
+        this.setAttribute("title", "画像をクリップボードへコピー");
+        this.showIconState("idle");
+      }, this.POPUP_DURATION);
+    }
+
+    /**
+     * 状態に応じてアイコンの表示を切り替える
+     */
+    private showIconState(state: "idle" | "loading" | "success" | "error") {
+      // すべての状態クラスを削除
+      this.classList.remove("is-loading", "is-success", "is-danger");
+
+      // すべてのアイコンを一旦非表示
+      const allIcons = this.querySelectorAll("[data-state]");
+      allIcons.forEach((icon) => icon.classList.add("is-hidden"));
+
+      switch (state) {
+        case "loading":
+          this.classList.add("is-loading");
+          break;
+        case "success":
+          this.classList.add("is-success");
+          this.querySelector('[data-state="success"]')?.classList.remove(
+            "is-hidden"
+          );
+          break;
+        case "error":
+          this.classList.add("is-danger");
+          this.querySelector('[data-state="error"]')?.classList.remove(
+            "is-hidden"
+          );
+          break;
+        case "idle":
+          this.querySelector('[data-state="idle"]')?.classList.remove(
+            "is-hidden"
+          );
+          break;
+      }
     }
   }
   customElements.define("copy-to-clipboard-button", CopyToClipboardButton);
