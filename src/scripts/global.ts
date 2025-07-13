@@ -25,6 +25,8 @@ declare global {
     "open-image-selector-dialog": CustomEvent;
     "open-directories-selector-dialog": CustomEvent;
     "copy-to-clipboard": CustomEvent;
+    "auto-reload-start": CustomEvent;
+    "auto-reload-stop": CustomEvent;
     "auto-reload-state-changed": CustomEvent<AutoReloadStateEventDetail>;
     "request-auto-reload-toggle": CustomEvent;
     "request-auto-reload-state": CustomEvent;
