@@ -11,13 +11,6 @@ import InfoViewerRaw from "./InfoViewerRaw.astro";
   <InfoViewerPrompt promptType="negative" />
   <InfoViewerOther />
   <InfoViewerRaw />
-
-  <button id="test-copy-button" class="block button is-primary"
-    >Copy to clipboard❗️</button
-  >
-  <button id="test-write-button" class="block button is-info"
-    >Write rating❗️</button
-  >
 </info-viewer>
 
 <style is:global>
@@ -42,45 +35,8 @@ import InfoViewerRaw from "./InfoViewerRaw.astro";
 </style>
 
 <script>
-  import { path } from "@tauri-apps/api";
-  import { invoke } from "@tauri-apps/api/core";
-
   class InfoViewer extends HTMLElement {
-    connectedCallback() {
-      // 子コンポーネントが各自でイベントをリッスンするため、
-      // ここでは特に何もしない
-    }
+    connectedCallback() {}
   }
   customElements.define("info-viewer", InfoViewer);
-
-  const copyButtonEl =
-    document.querySelector<HTMLButtonElement>("#test-copy-button")!;
-
-  copyButtonEl.addEventListener("click", async () => {
-    const filesInDownloads = ["hoge.png", "fuga.png"] as const;
-    const downloadDir = await path.downloadDir();
-    const fullPaths = await Promise.all(
-      filesInDownloads.map((p) => path.join(downloadDir, p))
-    );
-
-    console.log({ fullPaths });
-    const result = await invoke("set_clipboard_files", {
-      paths: fullPaths,
-    });
-    console.log({ "set_clipboard_files result": result });
-  });
-
-  const writeButtonEl =
-    document.querySelector<HTMLButtonElement>("#test-write-button")!;
-  writeButtonEl.addEventListener("click", async () => {
-    try {
-      const result2 = await invoke("write_exif_image_rating", {
-        path: "/Users/tenpamk2/hoge/1.png",
-        rating: 1,
-      });
-      console.log({ "write_exif_image_rating result": result2 });
-    } catch (error) {
-      console.error("write_exif_image_rating error:", error);
-    }
-  });
 </script>
