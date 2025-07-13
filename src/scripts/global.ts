@@ -10,6 +10,10 @@ export type OpenImageEventDetail = {
   imageFullPath: string;
 };
 
+export type AutoReloadStateEventDetail = {
+  isActive: boolean;
+};
+
 declare global {
   interface DocumentEventMap {
     "read-image-info": CustomEvent<ReadImageInfoEventDetail>;
@@ -21,5 +25,8 @@ declare global {
     "open-image-selector-dialog": CustomEvent;
     "open-directories-selector-dialog": CustomEvent;
     "copy-to-clipboard": CustomEvent;
+    "auto-reload-state-changed": CustomEvent<AutoReloadStateEventDetail>;
+    "request-auto-reload-toggle": CustomEvent;
+    "request-auto-reload-state": CustomEvent;
   }
 }

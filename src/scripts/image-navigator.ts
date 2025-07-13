@@ -45,7 +45,7 @@ const calculateCircularIndex = (
  */
 export const findImageInDirection = async (
   currentImagePath: string,
-  direction: "previous" | "next"
+  direction: "previous" | "next" | "last"
 ): Promise<string | null> => {
   try {
     const dir = await path.dirname(currentImagePath);
@@ -64,11 +64,14 @@ export const findImageInDirection = async (
       return null;
     }
 
-    const newIndex = calculateCircularIndex(
-      currentIndex,
-      direction,
-      imageFilenames.length
-    );
+    const newIndex =
+      direction === "last"
+        ? imageFilenames.length - 1
+        : calculateCircularIndex(
+            currentIndex,
+            direction,
+            imageFilenames.length
+          );
 
     const newImagePath = await path.join(dir, imageFilenames[newIndex]);
 

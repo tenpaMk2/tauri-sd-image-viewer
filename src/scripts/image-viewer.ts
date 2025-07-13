@@ -1,5 +1,7 @@
 import { path } from "@tauri-apps/api";
 import { invoke } from "@tauri-apps/api/core";
+import { AutoReloadExecutor } from "./auto-reload-executor";
+import { autoReloadStateManager } from "./auto-reload-state-manager";
 import type {
   OpenBrowserEventDetail,
   ReadImageInfoEventDetail,
@@ -14,6 +16,7 @@ class ImageViewer extends HTMLElement {
   private currentImageUrl: string | null = null;
 
   private keyboardHandler!: KeyboardHandler;
+  private autoReloadExecutor = new AutoReloadExecutor();
 
   // あとで `removeEventListener()` するためにアロー関数で定義
   private showPreviousImage = async () => {
@@ -32,6 +35,47 @@ class ImageViewer extends HTMLElement {
     );
   };
 
+  private createAutoReloadCallback = (): (() => Promise<void>) => {
+    return async () => {
+      if (!this.currentImagePath) {
+        console.error("No image path available");
+        return;
+      }
+
+      await this.navigateImage("last", { stopAutoReload: false });
+    };
+  };
+
+  private requestStartAutoReload = async () => {
+    if (autoReloadStateManager.getState()) {
+      console.warn("Auto reload is already active");
+      return;
+    }
+
+    const callback = this.createAutoReloadCallback();
+    this.autoReloadExecutor.start(callback, 2000);
+    autoReloadStateManager.start();
+  };
+
+  private requestStopAutoReload = async () => {
+    if (!autoReloadStateManager.getState()) {
+      console.warn("Auto reload is not active");
+      return;
+    }
+
+    this.autoReloadExecutor.stop();
+    autoReloadStateManager.stop();
+  };
+
+  private handleAutoReloadStateRequest = () => {
+    // 現在の状態を即座に通知
+    document.dispatchEvent(
+      new CustomEvent("auto-reload-state-changed", {
+        detail: { isActive: autoReloadStateManager.getState() },
+      })
+    );
+  };
+
   connectedCallback() {
     this.imgEl = this.querySelector("img")!;
 
@@ -45,6 +89,12 @@ class ImageViewer extends HTMLElement {
     document.addEventListener("navigate-to-previous", this.showPreviousImage);
     document.addEventListener("navigate-to-next", this.showNextImage);
     document.addEventListener("open-browser-from-viewer", this.openBrowser);
+    document.addEventListener("auto-reload-start", this.requestStartAutoReload);
+    document.addEventListener("auto-reload-stop", this.requestStopAutoReload);
+    document.addEventListener(
+      "request-auto-reload-state",
+      this.handleAutoReloadStateRequest
+    );
 
     // URLパラメータから初期画像のフルパスを取得
     const urlParams = new URLSearchParams(window.location.search);
@@ -71,6 +121,22 @@ class ImageViewer extends HTMLElement {
     );
     document.removeEventListener("navigate-to-next", this.showNextImage);
     document.removeEventListener("open-browser-from-viewer", this.openBrowser);
+    document.removeEventListener(
+      "auto-reload-start",
+      this.requestStartAutoReload
+    );
+    document.removeEventListener(
+      "auto-reload-stop",
+      this.requestStopAutoReload
+    );
+    document.removeEventListener(
+      "request-auto-reload-state",
+      this.handleAutoReloadStateRequest
+    );
+
+    // 自動リロードを停止
+    this.autoReloadExecutor.stop();
+    autoReloadStateManager.stop();
 
     // URLオブジェクトのクリーンアップ
     this.cleanupCurrentImageUrl();
@@ -116,12 +182,21 @@ class ImageViewer extends HTMLElement {
 
   /**
    * 指定された方向の画像を表示する
-   * @param direction "previous" for previous image, "next" for next image
    */
-  async navigateImage(direction: "previous" | "next") {
+  async navigateImage(
+    direction: "previous" | "next" | "last",
+    options: { stopAutoReload?: boolean } = { stopAutoReload: true }
+  ) {
     if (!this.currentImagePath) {
       console.error("No image path available");
       return;
+    }
+
+    // 自動リロード停止の制御
+    if (options.stopAutoReload && autoReloadStateManager.getState()) {
+      console.log("Stopping auto reload due to manual navigation");
+      this.autoReloadExecutor.stop();
+      autoReloadStateManager.stop();
     }
 
     const newImagePath = await ImageNavigator.findImageInDirection(
@@ -129,7 +204,7 @@ class ImageViewer extends HTMLElement {
       direction
     );
 
-    if (newImagePath) {
+    if (newImagePath && newImagePath !== this.currentImagePath) {
       await this.showImage(newImagePath);
     }
   }

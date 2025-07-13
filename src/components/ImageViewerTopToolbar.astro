@@ -35,6 +35,14 @@ import { Icon } from "astro-icon/components";
             <Icon name="mage:clipboard-2" size="1.25em" />
           </span>
         </copy-to-clipboard-button>
+        <auto-reload-latest-image-button
+          class="button is-rounded"
+          title="最新画像を自動リロード"
+        >
+          <span class="icon">
+            <Icon name="mage:arrow-up-right-circle" size="1.25em" />
+          </span>
+        </auto-reload-latest-image-button>
       </div>
     </div>
   </div>
@@ -95,4 +103,55 @@ import { Icon } from "astro-icon/components";
     }
   }
   customElements.define("copy-to-clipboard-button", CopyToClipboardButton);
+
+  class autoReloadLatestImageButton extends HTMLElement {
+    private isActive = false;
+
+    private handleClick = () => {
+      if (this.isActive) {
+        document.dispatchEvent(new CustomEvent("auto-reload-stop", {}));
+      } else {
+        document.dispatchEvent(new CustomEvent("auto-reload-start", {}));
+      }
+    };
+
+    private handleStateChange = (event: CustomEvent<{ isActive: boolean }>) => {
+      this.isActive = event.detail.isActive;
+      this.updateAppearance(this.isActive);
+    };
+
+    connectedCallback() {
+      this.addEventListener("click", this.handleClick);
+
+      // 状態変更イベントをリッスンして見た目を更新
+      document.addEventListener(
+        "auto-reload-state-changed",
+        this.handleStateChange
+      );
+
+      // 初期状態を問い合わせ
+      document.dispatchEvent(new CustomEvent("request-auto-reload-state"));
+    }
+
+    disconnectedCallback() {
+      document.removeEventListener(
+        "auto-reload-state-changed",
+        this.handleStateChange
+      );
+    }
+
+    private updateAppearance(isActive: boolean) {
+      if (isActive) {
+        this.classList.add("is-primary");
+        this.setAttribute("title", "自動リロードを停止");
+      } else {
+        this.classList.remove("is-primary");
+        this.setAttribute("title", "最新画像を自動リロード");
+      }
+    }
+  }
+  customElements.define(
+    "auto-reload-latest-image-button",
+    autoReloadLatestImageButton
+  );
 </script>
