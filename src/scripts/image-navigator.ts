@@ -6,7 +6,7 @@ import { SUPPORTED_IMAGE_EXTS } from "./mine-type";
  * 指定されたディレクトリの画像ファイル一覧を読み込む
  */
 export const loadImageFilesInDirectory = async (
-  directoryPath: string
+  directoryPath: string,
 ): Promise<string[]> => {
   try {
     const dirEntries = await readDir(directoryPath);
@@ -14,8 +14,8 @@ export const loadImageFilesInDirectory = async (
       (entry) =>
         entry.isFile &&
         SUPPORTED_IMAGE_EXTS.some((ext) =>
-          entry.name.toLowerCase().endsWith(`.${ext}`)
-        )
+          entry.name.toLowerCase().endsWith(`.${ext}`),
+        ),
     );
 
     return imageEntries.map((entry) => entry.name).sort();
@@ -31,7 +31,7 @@ export const loadImageFilesInDirectory = async (
 const calculateCircularIndex = (
   currentIndex: number,
   direction: "previous" | "next",
-  arrayLength: number
+  arrayLength: number,
 ): number => {
   return direction === "next"
     ? (currentIndex + 1) % arrayLength
@@ -45,7 +45,7 @@ const calculateCircularIndex = (
  */
 export const findImageInDirection = async (
   currentImagePath: string,
-  direction: "previous" | "next" | "last"
+  direction: "previous" | "next" | "last",
 ): Promise<string | null> => {
   try {
     const dir = await path.dirname(currentImagePath);
@@ -70,7 +70,7 @@ export const findImageInDirection = async (
         : calculateCircularIndex(
             currentIndex,
             direction,
-            imageFilenames.length
+            imageFilenames.length,
           );
 
     const newImagePath = await path.join(dir, imageFilenames[newIndex]);
