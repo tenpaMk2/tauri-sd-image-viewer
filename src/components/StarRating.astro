@@ -9,7 +9,7 @@ const { maxRating = 5 } = Astro.props;
 const ratings = Array.from({ length: maxRating }, (_, i) => i + 1);
 ---
 
-<star-rating class="buttons has-addons is-small has-text-white">
+<star-rating class="buttons has-addons is-small has-text-white m-0">
   {
     ratings.map((rating) => (
       <button
