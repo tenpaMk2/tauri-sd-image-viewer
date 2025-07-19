@@ -5,14 +5,20 @@ mod image_handler;
 mod image_types;
 mod png_handler;
 mod sd_parameters;
+mod thumbnail_handler;
 use chrono::Local;
 use colored::*;
 use log;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // サムネイル状態を初期化
+    let thumbnail_config = thumbnail_handler::ThumbnailConfig::default();
+    let thumbnail_state = thumbnail_handler::ThumbnailState::new(thumbnail_config);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .manage(thumbnail_state)
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -54,6 +60,9 @@ pub fn run() {
             exif_handler::write_exif_image_rating,
             // 統合操作
             image_handler::read_comprehensive_image_info,
+            // サムネイル操作
+            thumbnail_handler::get_thumbnail,
+            thumbnail_handler::clear_thumbnail_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
