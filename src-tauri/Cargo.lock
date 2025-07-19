@@ -4828,6 +4828,7 @@ dependencies = [
  "objc2-foundation 0.3.1",
  "once_cell",
  "png",
+ "rayon",
  "regex",
  "serde",
  "serde_json",
