@@ -25,6 +25,14 @@ const title = promptType === "positive" ? "Positive prompt" : "Negative prompt";
 </info-viewer-prompt>
 
 <style is:global>
+  info-viewer-prompt .tags > .tags {
+    margin: 0;
+  }
+  info-viewer-prompt .tags > .tags > .tag:last-child {
+    border-left: 2px dotted
+      hsl(var(--bulma-tag-h) var(--bulma-tag-s) var(--bulma-tag-color-l) / 50%);
+    font-weight: bold;
+  }
   info-viewer-prompt .tags > .tag {
     padding-right: 0.3rem;
     padding-left: 0.3rem;
@@ -94,27 +102,44 @@ const title = promptType === "positive" ? "Positive prompt" : "Negative prompt";
       this.containerEl.classList.remove("skeleton-block");
 
       const tagEls = sdTags.map((tag) => {
-        const tagEl = document.createElement("span");
-        tagEl.classList.add("tag");
+        const hasWeight = tag.weight !== null;
 
-        if (tag.weight === null) {
-          tagEl.textContent = tag.name;
+        if (hasWeight) {
+          // Weight付きタグ：分割表示
+          const tagDivEl = document.createElement("div");
+          tagDivEl.classList.add("tags", "has-addons");
+
+          const nameEl = document.createElement("span");
+          nameEl.classList.add("tag");
+          nameEl.textContent = tag.name;
+          this.setTagIcon(nameEl, tag.name);
+
+          const weightEl = document.createElement("span");
+          weightEl.classList.add("tag");
+          weightEl.textContent = tag.weight!.toString();
+
+          tagDivEl.appendChild(nameEl);
+          tagDivEl.appendChild(weightEl);
+          return tagDivEl;
         } else {
-          tagEl.textContent = `(${tag.name}:${tag.weight})`;
+          // 通常タグ：単一表示
+          const tagEl = document.createElement("span");
+          tagEl.classList.add("tag");
+          tagEl.textContent = tag.name;
+          this.setTagIcon(tagEl, tag.name);
+          return tagEl;
         }
-
-        if (SD_TAG_ATTRIBUTES[tag.name]) {
-          const category = SD_TAG_ATTRIBUTES[tag.name].category;
-          const icon = TAG_ICONS[category];
-          tagEl.style.setProperty("--icon-char", `"${icon}"`);
-        }
-
-        return tagEl;
       });
 
       console.debug({ tagElsLength: tagEls.length });
-
       this.containerEl.replaceChildren(...tagEls);
+    }
+
+    private setTagIcon(element: HTMLElement, tagName: string): void {
+      if (!SD_TAG_ATTRIBUTES[tagName]) return;
+      const category = SD_TAG_ATTRIBUTES[tagName].category;
+      const icon = TAG_ICONS[category];
+      element.style.setProperty("--icon-char", `"${icon}"`);
     }
   }
   customElements.define("info-viewer-prompt", InfoViewerPrompt);
