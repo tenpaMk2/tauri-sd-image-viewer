@@ -80,6 +80,17 @@ impl ThumbnailHandler {
     fn generate_cache_key(&self, image_path: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(image_path.as_bytes());
+
+        // ファイルサイズと更新時刻も含めて、ファイル内容の変更を検出
+        if let Ok(metadata) = fs::metadata(image_path) {
+            hasher.update(metadata.len().to_le_bytes());
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
+                    hasher.update(duration.as_secs().to_le_bytes());
+                }
+            }
+        }
+
         hasher.update(self.config.size.to_le_bytes());
         hasher.update(self.config.quality.to_le_bytes());
         hex::encode(hasher.finalize())
@@ -96,28 +107,94 @@ impl ThumbnailHandler {
 
     /// キャッシュが有効かチェック
     fn is_cache_valid(&self, cache_path: &Path, original_path: &str) -> bool {
+        log::info!(
+            "キャッシュ有効性チェック開始 - キャッシュ: {}, 元ファイル: {}",
+            cache_path.display(),
+            original_path
+        );
+
         if !cache_path.exists() {
+            log::info!("キャッシュファイルが存在しません: {}", cache_path.display());
             return false;
         }
 
-        // 元ファイルの更新時刻を取得
+        // 元ファイルのメタデータを取得
         let original_metadata = match fs::metadata(original_path) {
-            Ok(metadata) => metadata,
-            Err(_) => return false,
+            Ok(metadata) => {
+                log::info!("元ファイルのメタデータ取得成功: {}", original_path);
+                metadata
+            }
+            Err(e) => {
+                log::info!("元ファイルのメタデータ取得失敗: {} ({})", original_path, e);
+                return false;
+            }
         };
 
         let cache_metadata = match fs::metadata(cache_path) {
-            Ok(metadata) => metadata,
-            Err(_) => return false,
+            Ok(metadata) => {
+                log::info!(
+                    "キャッシュファイルのメタデータ取得成功: {}",
+                    cache_path.display()
+                );
+                metadata
+            }
+            Err(e) => {
+                log::info!(
+                    "キャッシュファイルのメタデータ取得失敗: {} ({})",
+                    cache_path.display(),
+                    e
+                );
+                return false;
+            }
         };
 
-        // キャッシュファイルが元ファイルより新しいかチェック
-        cache_metadata
+        // 更新時刻の比較
+        let cache_modified = cache_metadata
             .modified()
-            .unwrap_or_else(|_| std::time::UNIX_EPOCH)
-            >= original_metadata
-                .modified()
-                .unwrap_or_else(|_| std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| std::time::UNIX_EPOCH);
+        let original_modified = original_metadata
+            .modified()
+            .unwrap_or_else(|_| std::time::UNIX_EPOCH);
+
+        // キャッシュファイルが元ファイルより古い場合は無効
+        if cache_modified < original_modified {
+            log::info!(
+                "キャッシュ無効: キャッシュ更新時刻 < 元ファイル更新時刻 ({:?} < {:?})",
+                cache_modified,
+                original_modified
+            );
+            return false;
+        }
+
+        // ファイルサイズの比較（ファイルが差し替えられた場合の検出）
+        let original_size = original_metadata.len();
+
+        // キャッシュファイル名に含まれるべき元ファイルの情報をチェック
+        // キャッシュキーは元ファイルのパス、サイズ、設定から生成されているので、
+        // 現在の元ファイルから生成されるキャッシュキーと一致するかチェック
+        let expected_cache_key = self.generate_cache_key(original_path);
+        let expected_cache_path = self.get_cache_file_path(&expected_cache_key);
+
+        let cache_key_matches = match expected_cache_path {
+            Ok(expected_path) => expected_path == cache_path,
+            Err(_) => false,
+        };
+
+        if !cache_key_matches {
+            log::info!(
+                "キャッシュ無効: キャッシュキーが一致しません（ファイル内容が変更された可能性）"
+            );
+            return false;
+        }
+
+        log::info!(
+            "キャッシュ有効: 更新時刻・キャッシュキーともに一致 (キャッシュ: {:?}, 元ファイル: {:?}, サイズ: {})",
+            cache_modified,
+            original_modified,
+            original_size
+        );
+
+        true
     }
 
     /// サムネイルを生成または取得
