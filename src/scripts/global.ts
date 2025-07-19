@@ -1,6 +1,8 @@
 import type { ComprehensiveImageInfo } from "./rust-synced-types";
 
-export type ReadImageInfoEventDetail = ComprehensiveImageInfo;
+export type ReadImageInfoEventDetail = ComprehensiveImageInfo & {
+  path: string;
+};
 
 export type OpenBrowserEventDetail = {
   dir: string;
@@ -22,6 +24,21 @@ export type ClipboardCopyFailedEventDetail = {
   error: string;
 };
 
+export type WriteImageRatingEventDetail = {
+  rating: number;
+};
+
+export type ImageRatingWriteSuccessEventDetail = {
+  path: string;
+  rating: number;
+};
+
+export type ImageRatingWriteFailedEventDetail = {
+  path: string;
+  rating: number;
+  error: string;
+};
+
 declare global {
   interface DocumentEventMap {
     "read-image-info": CustomEvent<ReadImageInfoEventDetail>;
@@ -35,6 +52,9 @@ declare global {
     "copy-to-clipboard": CustomEvent;
     "clipboard-copy-success": CustomEvent<ClipboardCopySuccessEventDetail>;
     "clipboard-copy-failed": CustomEvent<ClipboardCopyFailedEventDetail>;
+    "write-image-rating": CustomEvent<WriteImageRatingEventDetail>;
+    "image-rating-write-success": CustomEvent<ImageRatingWriteSuccessEventDetail>;
+    "image-rating-write-failed": CustomEvent<ImageRatingWriteFailedEventDetail>;
     "auto-reload-start": CustomEvent;
     "auto-reload-stop": CustomEvent;
     "auto-reload-state-changed": CustomEvent<AutoReloadStateEventDetail>;

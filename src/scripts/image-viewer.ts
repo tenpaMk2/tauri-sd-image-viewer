@@ -4,6 +4,7 @@ import { autoReloader } from "./auto-reloader";
 import type {
   OpenBrowserEventDetail,
   ReadImageInfoEventDetail,
+  WriteImageRatingEventDetail,
 } from "./global";
 import { loadImage } from "./image-loader";
 import * as ImageNavigator from "./image-navigator";
@@ -69,6 +70,43 @@ class ImageViewer extends HTMLElement {
     }
   };
 
+  private writeImageRating = async (
+    event: CustomEvent<WriteImageRatingEventDetail>
+  ) => {
+    const { rating } = event.detail;
+
+    if (!this.currentImagePath) {
+      console.warn("No image path available for rating");
+      return;
+    }
+
+    try {
+      await invoke("write_exif_image_rating", {
+        path: this.currentImagePath,
+        rating: rating,
+      });
+      console.log(`Rating ${rating} written to ${this.currentImagePath}`);
+
+      // rating書き込み成功を通知
+      document.dispatchEvent(
+        new CustomEvent("image-rating-write-success", {
+          detail: { path: this.currentImagePath, rating },
+        })
+      );
+    } catch (error) {
+      console.error("Failed to write rating:", error);
+      document.dispatchEvent(
+        new CustomEvent("image-rating-write-failed", {
+          detail: {
+            path: this.currentImagePath,
+            rating,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+      );
+    }
+  };
+
   private createAutoReloadCallback = (): (() => Promise<void>) => {
     return async () => {
       if (!this.currentImagePath) {
@@ -117,6 +155,7 @@ class ImageViewer extends HTMLElement {
     document.addEventListener("navigate-to-next", this.showNextImage);
     document.addEventListener("open-browser-from-viewer", this.openBrowser);
     document.addEventListener("copy-to-clipboard", this.copyToClipboard);
+    document.addEventListener("write-image-rating", this.writeImageRating);
     document.addEventListener("auto-reload-start", this.requestStartAutoReload);
     document.addEventListener("auto-reload-stop", this.requestStopAutoReload);
 
@@ -146,6 +185,7 @@ class ImageViewer extends HTMLElement {
     document.removeEventListener("navigate-to-next", this.showNextImage);
     document.removeEventListener("open-browser-from-viewer", this.openBrowser);
     document.removeEventListener("copy-to-clipboard", this.copyToClipboard);
+    document.removeEventListener("write-image-rating", this.writeImageRating);
     document.removeEventListener(
       "auto-reload-start",
       this.requestStartAutoReload
@@ -243,8 +283,11 @@ class ImageViewer extends HTMLElement {
       console.log("Read image info");
       console.debug({ result });
 
+      // パス情報を追加してイベントを発火
       document.dispatchEvent(
-        new CustomEvent("read-image-info", { detail: result })
+        new CustomEvent("read-image-info", {
+          detail: { ...result, path: filePath },
+        })
       );
     } catch (error) {
       console.error("Failed to load image metadata:", error);
