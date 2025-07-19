@@ -30,6 +30,10 @@ const title = promptType === "positive" ? "Positive prompt" : "Negative prompt";
     padding-left: 0.3rem;
     font-size: 0.875rem;
   }
+
+  info-viewer-prompt .tag::before {
+    content: var(--icon-char, "");
+  }
 </style>
 
 <style>
@@ -41,6 +45,23 @@ const title = promptType === "positive" ? "Positive prompt" : "Negative prompt";
 <script>
   import type { ReadImageInfoEventDetail } from "@scripts/global";
   import type { SdTag } from "@scripts/rust-synced-types";
+  import type { SdTagCategory } from "@scripts/sd-tag-attributes";
+  import { SD_TAG_ATTRIBUTES } from "@src-root/scripts/sd-tag-attributes";
+
+  const TAG_ICONS = {
+    "quality": "🖼️",
+    "person-count": "🔢",
+    "person-relations": "👥",
+    "character-name": "📛",
+    "series-name": "📚",
+    "camera": "📷",
+    "character": "🐰",
+    "outfit": "👚",
+    "pose": "✌️",
+    "background": "🌄",
+    "face": "😊",
+    "effect": "🌟",
+  } as const satisfies Record<SdTagCategory, string>;
 
   export class InfoViewerPrompt extends HTMLElement {
     containerEl!: HTMLElement;
@@ -75,12 +96,17 @@ const title = promptType === "positive" ? "Positive prompt" : "Negative prompt";
       const tagEls = sdTags.map((tag) => {
         const tagEl = document.createElement("span");
         tagEl.classList.add("tag");
-        tagEl.classList.add("is-primary");
 
         if (tag.weight === null) {
           tagEl.textContent = tag.name;
         } else {
           tagEl.textContent = `(${tag.name}:${tag.weight})`;
+        }
+
+        if (SD_TAG_ATTRIBUTES[tag.name]) {
+          const category = SD_TAG_ATTRIBUTES[tag.name].category;
+          const icon = TAG_ICONS[category];
+          tagEl.style.setProperty("--icon-char", `"${icon}"`);
         }
 
         return tagEl;
