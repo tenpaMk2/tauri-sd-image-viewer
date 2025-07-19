@@ -342,9 +342,9 @@ fn acquire_handler_lock<T>(
     })
 }
 
-/// サムネイルを取得するTauriコマンド
+/// サムネイルをキャッシュから読み込む（なければ生成）Tauriコマンド
 #[tauri::command]
-pub fn get_thumbnail<R: Runtime>(
+pub fn load_thumbnail_from_cache<R: Runtime>(
     image_path: String,
     app: AppHandle<R>,
     state: tauri::State<ThumbnailState>,

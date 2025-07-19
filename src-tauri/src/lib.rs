@@ -61,7 +61,7 @@ pub fn run() {
             // 統合操作
             image_handler::read_comprehensive_image_info,
             // サムネイル操作
-            thumbnail_handler::get_thumbnail,
+            thumbnail_handler::load_thumbnail_from_cache,
             thumbnail_handler::clear_thumbnail_cache,
         ])
         .run(tauri::generate_context!())
