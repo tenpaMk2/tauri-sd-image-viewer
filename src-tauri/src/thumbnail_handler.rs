@@ -76,34 +76,37 @@ impl ThumbnailHandler {
         Ok(cache_dir.join("thumbnails"))
     }
 
-    /// パスのハッシュ部分を生成（設定も含む）
+    /// パスのハッシュ部分を生成（主キー：ファイルパスのみ）
     fn generate_path_hash(&self, image_path: &str) -> String {
         let mut path_hasher = Sha256::new();
         path_hasher.update(image_path.as_bytes());
-        path_hasher.update(self.config.size.to_le_bytes());
-        path_hasher.update(self.config.quality.to_le_bytes());
         hex::encode(path_hasher.finalize())
+    }
+
+    /// 設定とファイルサイズのハッシュを生成（副キー）
+    fn generate_content_hash(&self, image_path: &str) -> String {
+        let mut content_hasher = Sha256::new();
+        content_hasher.update(self.config.size.to_le_bytes());
+        content_hasher.update(self.config.quality.to_le_bytes());
+
+        // ファイルサイズを取得
+        if let Ok(metadata) = fs::metadata(image_path) {
+            content_hasher.update(metadata.len().to_le_bytes());
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
+                    content_hasher.update(duration.as_secs().to_le_bytes());
+                }
+            }
+        }
+
+        hex::encode(content_hasher.finalize())
     }
 
     /// 画像ファイルパスからキャッシュキーを生成
     fn generate_cache_key(&self, image_path: &str) -> String {
         let path_hash = self.generate_path_hash(image_path);
-
-        // ファイルの日付情報とサイズを取得
-        if let Ok(metadata) = fs::metadata(image_path) {
-            let size = metadata.len();
-            if let Ok(modified) = metadata.modified() {
-                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
-                    let timestamp = duration.as_secs();
-                    return format!("{}_{}_{}", path_hash, size, timestamp);
-                }
-            }
-            // 日付情報が取得できない場合はサイズのみ
-            return format!("{}_{}", path_hash, size);
-        }
-
-        // メタデータが取得できない場合はパスハッシュのみ
-        path_hash
+        let content_hash = self.generate_content_hash(image_path);
+        format!("{}_{}", path_hash, content_hash)
     }
 
     /// キャッシュファイルのパスを取得
