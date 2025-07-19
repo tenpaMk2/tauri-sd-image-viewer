@@ -76,14 +76,18 @@ impl ThumbnailHandler {
         Ok(cache_dir.join("thumbnails"))
     }
 
-    /// 画像ファイルパスからキャッシュキーを生成
-    fn generate_cache_key(&self, image_path: &str) -> String {
-        // パスのハッシュ部分
+    /// パスのハッシュ部分を生成（設定も含む）
+    fn generate_path_hash(&self, image_path: &str) -> String {
         let mut path_hasher = Sha256::new();
         path_hasher.update(image_path.as_bytes());
         path_hasher.update(self.config.size.to_le_bytes());
         path_hasher.update(self.config.quality.to_le_bytes());
-        let path_hash = hex::encode(path_hasher.finalize());
+        hex::encode(path_hasher.finalize())
+    }
+
+    /// 画像ファイルパスからキャッシュキーを生成
+    fn generate_cache_key(&self, image_path: &str) -> String {
+        let path_hash = self.generate_path_hash(image_path);
 
         // ファイルの日付情報とサイズを取得
         if let Ok(metadata) = fs::metadata(image_path) {
@@ -136,6 +140,11 @@ impl ThumbnailHandler {
         true
     }
 
+    /// キャッシュファイルが古いキャッシュかどうかをチェック
+    fn is_old_cache_file(&self, file_name: &str, path_hash: &str) -> bool {
+        file_name.starts_with(path_hash) && file_name.ends_with(".jpg")
+    }
+
     /// 指定されたパスの古いキャッシュファイルを削除
     fn remove_old_cache_files(&self, image_path: &str) -> Result<(), String> {
         let cache_dir = self
@@ -147,44 +156,36 @@ impl ThumbnailHandler {
             return Ok(());
         }
 
-        // パスのハッシュ部分を生成（現在のファイルと同じパスを持つキャッシュを特定するため）
-        let mut path_hasher = Sha256::new();
-        path_hasher.update(image_path.as_bytes());
-        path_hasher.update(self.config.size.to_le_bytes());
-        path_hasher.update(self.config.quality.to_le_bytes());
-        let path_hash = hex::encode(path_hasher.finalize());
-
+        let path_hash = self.generate_path_hash(image_path);
         let entries = fs::read_dir(cache_dir)
             .map_err(|e| format!("キャッシュディレクトリの読み取りに失敗: {}", e))?;
 
         let mut removed_count = 0;
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(file_name) = path.file_name() {
-                        if let Some(name_str) = file_name.to_str() {
-                            // ファイル名がパスハッシュで始まり、.jpgで終わる場合は同じパスのキャッシュ
-                            if name_str.starts_with(&path_hash) && name_str.ends_with(".jpg") {
-                                match fs::remove_file(&path) {
-                                    Ok(_) => {
-                                        removed_count += 1;
-                                        log::info!(
-                                            "古いキャッシュファイルを削除: {}",
-                                            path.display()
-                                        );
-                                    }
-                                    Err(e) => {
-                                        log::warn!(
-                                            "古いキャッシュファイルの削除に失敗: {} ({})",
-                                            path.display(),
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+
+            let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+
+            if !self.is_old_cache_file(file_name, &path_hash) {
+                continue;
+            }
+
+            match fs::remove_file(&path) {
+                Ok(_) => {
+                    removed_count += 1;
+                    log::info!("古いキャッシュファイルを削除: {}", path.display());
+                }
+                Err(e) => {
+                    log::warn!(
+                        "古いキャッシュファイルの削除に失敗: {} ({})",
+                        path.display(),
+                        e
+                    );
                 }
             }
         }
