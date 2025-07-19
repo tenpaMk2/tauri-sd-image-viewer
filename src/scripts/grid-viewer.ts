@@ -1,41 +1,17 @@
 import "@scripts/image-card";
 import type { ImageCard } from "@scripts/image-card";
 import { path } from "@tauri-apps/api";
-import { readDir, readFile } from "@tauri-apps/plugin-fs";
-import {
-  detectImageMimeType,
-  SUPPORTED_IMAGE_EXTS,
-  type MimeType,
-} from "./mine-type";
+import { invoke } from "@tauri-apps/api/core";
+import { readDir } from "@tauri-apps/plugin-fs";
+import { SUPPORTED_IMAGE_EXTS } from "./mine-type";
+import type { ThumbnailInfo } from "./rust-synced-types";
 import { TaskQueue } from "./task-queue";
 
-// 画像データからアスペクト比を取得する関数（最適化バージョン）
-const getImageDetails = (
-  imageData: Uint8Array,
-  mimeType: string
-): Promise<{
-  url: string;
-  width: number;
-  height: number;
-}> => {
-  // asyncで囲わずに、直接Promiseを返す
-  return new Promise((resolve, reject) => {
-    const blob = new Blob([imageData], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-
-    const img = new Image();
-    img.onload = () => {
-      const { width, height } = img;
-      resolve({ url, width, height });
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("画像の読み込みに失敗しました"));
-    };
-
-    img.src = url;
-  });
+// サムネイルからObjectURLを作成する関数
+const createThumbnailUrl = (thumbnailInfo: ThumbnailInfo): string => {
+  const uint8Array = new Uint8Array(thumbnailInfo.data);
+  const blob = new Blob([uint8Array], { type: thumbnailInfo.mime_type });
+  return URL.createObjectURL(blob);
 };
 
 class GridViewer extends HTMLElement {
@@ -60,7 +36,7 @@ class GridViewer extends HTMLElement {
       imageEntries
         .map((entry) => entry.name)
         .map((filename) => path.join(TARGET_DIR, filename))
-        .sort()
+        .sort(),
     );
 
     // 先にDOM更新
@@ -76,22 +52,24 @@ class GridViewer extends HTMLElement {
 
   updateImage = async (imageFullPath: string) => {
     try {
-      const mimeType: MimeType =
-        (await detectImageMimeType(imageFullPath)) ?? "image/png";
-      const imageData = await readFile(imageFullPath);
-      // 画像の詳細情報を取得
-      const { url, width, height } = await getImageDetails(imageData, mimeType);
+      // サムネイルを生成または取得
+      const thumbnailResponse = (await invoke("load_thumbnail_from_cache", {
+        imagePath: imageFullPath,
+      })) as ThumbnailInfo;
+
+      // ObjectURLを作成
+      const url = createThumbnailUrl(thumbnailResponse);
 
       const imageCard = this.imageMap.get(imageFullPath)!;
       imageCard.setAttribute("src", url);
-      imageCard.setAttribute("width", width.toString());
-      imageCard.setAttribute("height", height.toString());
+      imageCard.setAttribute("width", thumbnailResponse.width.toString());
+      imageCard.setAttribute("height", thumbnailResponse.height.toString());
       imageCard.setAttribute(
         "href",
-        "view/?initialImagePath=" + encodeURIComponent(imageFullPath)
+        "view/?initialImagePath=" + encodeURIComponent(imageFullPath),
       );
     } catch (error) {
-      console.error(`Failed to load image: ${imageFullPath}`, error);
+      console.error(`Failed to load thumbnail: ${imageFullPath}`, error);
     }
   };
 }

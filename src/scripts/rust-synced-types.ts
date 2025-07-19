@@ -52,3 +52,10 @@ export type ComprehensiveImageInfo = Readonly<{
   png_info: PngImageInfo;
   exif_info: ExifImageInfo;
 }>;
+
+export type ThumbnailInfo = Readonly<{
+  data: number[];
+  mime_type: string;
+  width: number;
+  height: number;
+}>;
