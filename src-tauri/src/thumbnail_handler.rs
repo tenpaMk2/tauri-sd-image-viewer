@@ -1,10 +1,10 @@
 use image::{GenericImageView, ImageFormat};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use tauri::{AppHandle, Manager, Runtime};
 
 /// サムネイルの設定
@@ -32,35 +32,31 @@ pub struct ThumbnailInfo {
     pub mime_type: String,
 }
 
+/// バッチサムネイル結果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BatchThumbnailResult {
+    pub path: String,
+    pub thumbnail: Option<ThumbnailInfo>,
+    pub error: Option<String>,
+}
+
 /// サムネイルハンドラー
 pub struct ThumbnailHandler {
     config: ThumbnailConfig,
-    cache_dir: Option<PathBuf>, // 遅延初期化用
+    cache_dir: PathBuf, // Mutexなし！初期化時に設定
 }
 
 impl ThumbnailHandler {
     /// 新しいサムネイルハンドラーを作成
-    pub fn new(config: ThumbnailConfig) -> Self {
-        Self {
-            config,
-            cache_dir: None,
-        }
-    }
+    pub fn new<R: Runtime>(config: ThumbnailConfig, app: &AppHandle<R>) -> Result<Self, String> {
+        let cache_dir = Self::get_cache_directory(app)?;
 
-    /// キャッシュディレクトリを取得または初期化
-    fn ensure_cache_dir<R: Runtime>(&mut self, app: &AppHandle<R>) -> Result<&PathBuf, String> {
-        if self.cache_dir.is_none() {
-            let cache_dir = Self::get_cache_directory(app)?;
-
-            if !cache_dir.exists() {
-                fs::create_dir_all(&cache_dir)
-                    .map_err(|e| format!("キャッシュディレクトリの作成に失敗: {}", e))?;
-            }
-
-            self.cache_dir = Some(cache_dir);
+        if !cache_dir.exists() {
+            fs::create_dir_all(&cache_dir)
+                .map_err(|e| format!("キャッシュディレクトリの作成に失敗: {}", e))?;
         }
 
-        Ok(self.cache_dir.as_ref().unwrap())
+        Ok(Self { config, cache_dir })
     }
 
     /// キャッシュディレクトリのパスを取得
@@ -105,12 +101,8 @@ impl ThumbnailHandler {
     }
 
     /// キャッシュファイルのパスを取得
-    fn get_cache_file_path(&self, cache_key: &str) -> Result<PathBuf, String> {
-        let cache_dir = self
-            .cache_dir
-            .as_ref()
-            .ok_or("キャッシュディレクトリが初期化されていません")?;
-        Ok(cache_dir.join(format!("{}.jpg", cache_key)))
+    fn get_cache_file_path(&self, cache_key: &str) -> PathBuf {
+        self.cache_dir.join(format!("{}.jpg", cache_key))
     }
 
     /// キャッシュが有効かチェック
@@ -147,17 +139,12 @@ impl ThumbnailHandler {
 
     /// 指定されたパスの古いキャッシュファイルを削除
     fn remove_old_cache_files(&self, image_path: &str) -> Result<(), String> {
-        let cache_dir = self
-            .cache_dir
-            .as_ref()
-            .ok_or("キャッシュディレクトリが初期化されていません")?;
-
-        if !cache_dir.exists() {
+        if !self.cache_dir.exists() {
             return Ok(());
         }
 
         let path_hash = self.generate_path_hash(image_path);
-        let entries = fs::read_dir(cache_dir)
+        let entries = fs::read_dir(&self.cache_dir)
             .map_err(|e| format!("キャッシュディレクトリの読み取りに失敗: {}", e))?;
 
         let mut removed_count = 0;
@@ -197,17 +184,76 @@ impl ThumbnailHandler {
         Ok(())
     }
 
+    /// バッチでサムネイルを生成または取得（並列処理）
+    pub fn get_thumbnails_batch<R: Runtime>(
+        &self,
+        image_paths: &[String],
+        _app: &AppHandle<R>,
+    ) -> Vec<BatchThumbnailResult> {
+        // 並列処理でサムネイルを生成（キャッシュディレクトリを直接使用）
+        image_paths
+            .par_iter()
+            .map(
+                |path| match self.get_thumbnail_with_cache_dir(path, &self.cache_dir) {
+                    Ok(thumbnail) => BatchThumbnailResult {
+                        path: path.clone(),
+                        thumbnail: Some(thumbnail),
+                        error: None,
+                    },
+                    Err(e) => BatchThumbnailResult {
+                        path: path.clone(),
+                        thumbnail: None,
+                        error: Some(e),
+                    },
+                },
+            )
+            .collect()
+    }
+
+    /// キャッシュディレクトリを直接指定してサムネイル生成（Mutexフリー）
+    fn get_thumbnail_with_cache_dir(
+        &self,
+        image_path: &str,
+        cache_dir: &PathBuf,
+    ) -> Result<ThumbnailInfo, String> {
+        let cache_key = self.generate_cache_key(image_path);
+        let cache_path = cache_dir.join(format!("{}.jpg", cache_key));
+
+        // キャッシュが有効かチェック
+        if self.is_cache_valid(&cache_path, image_path) {
+            let data = fs::read(&cache_path)
+                .map_err(|e| format!("キャッシュファイルの読み込みに失敗: {}", e))?;
+
+            log::info!("サムネイルキャッシュから読み込み: {}", cache_path.display());
+            return Ok(ThumbnailInfo {
+                data,
+                width: self.config.size,
+                height: self.config.size,
+                mime_type: "image/jpeg".to_string(),
+            });
+        }
+
+        // 新しいサムネイルを生成
+        let thumbnail_info = self.generate_thumbnail(image_path)?;
+
+        // キャッシュに保存
+        if let Err(e) = fs::write(&cache_path, &thumbnail_info.data) {
+            log::warn!("サムネイルキャッシュの保存に失敗: {}", e);
+        } else {
+            log::info!("サムネイルキャッシュに保存: {}", cache_path.display());
+        }
+
+        Ok(thumbnail_info)
+    }
+
     /// サムネイルを生成または取得
     pub fn get_thumbnail<R: Runtime>(
-        &mut self,
+        &self,
         image_path: &str,
-        app: &AppHandle<R>,
+        _app: &AppHandle<R>,
     ) -> Result<ThumbnailInfo, String> {
-        // キャッシュディレクトリを確保
-        self.ensure_cache_dir(app)?;
-
         let cache_key = self.generate_cache_key(image_path);
-        let cache_path = self.get_cache_file_path(&cache_key)?;
+        let cache_path = self.get_cache_file_path(&cache_key);
 
         // キャッシュが有効かチェック
         if self.is_cache_valid(&cache_path, image_path) {
@@ -263,19 +309,16 @@ impl ThumbnailHandler {
     }
 
     /// キャッシュをクリア（安全版）
-    pub fn clear_cache_safe<R: Runtime>(&mut self, app: &AppHandle<R>) -> Result<(), String> {
-        self.ensure_cache_dir(app)?;
-
-        let cache_dir = self.cache_dir.as_ref().unwrap();
-        if !cache_dir.exists() {
+    pub fn clear_cache_safe<R: Runtime>(&self, _app: &AppHandle<R>) -> Result<(), String> {
+        if !self.cache_dir.exists() {
             return Ok(());
         }
 
-        let entries = fs::read_dir(cache_dir).map_err(|e| {
+        let entries = fs::read_dir(&self.cache_dir).map_err(|e| {
             let error_msg = format!(
                 "キャッシュディレクトリの読み取りに失敗: {} (パス: {})",
                 e,
-                cache_dir.display()
+                self.cache_dir.display()
             );
             log::error!("{}", error_msg);
             error_msg
@@ -318,28 +361,15 @@ impl ThumbnailHandler {
 
 /// サムネイル状態管理用の構造体
 pub struct ThumbnailState {
-    pub handler: Mutex<ThumbnailHandler>,
+    pub handler: ThumbnailHandler,
 }
 
 impl ThumbnailState {
     /// 新しいThumbnailStateを作成
-    pub fn new(config: ThumbnailConfig) -> Self {
-        let handler = ThumbnailHandler::new(config);
-        Self {
-            handler: Mutex::new(handler),
-        }
+    pub fn new<R: Runtime>(config: ThumbnailConfig, app: &AppHandle<R>) -> Result<Self, String> {
+        let handler = ThumbnailHandler::new(config, app)?;
+        Ok(Self { handler })
     }
-}
-
-/// Mutexロックを取得し、PoisonErrorを適切にハンドリング
-fn acquire_handler_lock<T>(
-    mutex_result: Result<T, std::sync::PoisonError<T>>,
-) -> Result<T, String> {
-    mutex_result.map_err(|e| {
-        let error_msg = format!("サムネイルハンドラーのロックに失敗: {:?}", e);
-        log::error!("{}", error_msg);
-        error_msg
-    })
 }
 
 /// サムネイルをキャッシュから読み込む（なければ生成）Tauriコマンド
@@ -349,8 +379,23 @@ pub fn load_thumbnail_from_cache<R: Runtime>(
     app: AppHandle<R>,
     state: tauri::State<ThumbnailState>,
 ) -> Result<ThumbnailInfo, String> {
-    let mut handler = acquire_handler_lock(state.handler.lock())?;
-    handler.get_thumbnail(&image_path, &app)
+    state.handler.get_thumbnail(&image_path, &app)
+}
+
+/// バッチでサムネイルを生成または取得するTauriコマンド
+#[tauri::command]
+pub fn load_thumbnails_batch<R: Runtime>(
+    image_paths: Vec<String>,
+    app: AppHandle<R>,
+    state: tauri::State<ThumbnailState>,
+) -> Vec<BatchThumbnailResult> {
+    log::info!(
+        "バッチでサムネイル処理開始: {}個のファイル",
+        image_paths.len()
+    );
+    let results = state.handler.get_thumbnails_batch(&image_paths, &app);
+    log::info!("バッチサムネイル処理完了");
+    results
 }
 
 /// サムネイルキャッシュをクリアするTauriコマンド
@@ -359,6 +404,5 @@ pub fn clear_thumbnail_cache<R: Runtime>(
     app: AppHandle<R>,
     state: tauri::State<ThumbnailState>,
 ) -> Result<(), String> {
-    let mut handler = acquire_handler_lock(state.handler.lock())?;
-    handler.clear_cache_safe(&app)
+    state.handler.clear_cache_safe(&app)
 }

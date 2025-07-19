@@ -9,16 +9,26 @@ mod thumbnail_handler;
 use chrono::Local;
 use colored::*;
 use log;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // サムネイル状態を初期化
-    let thumbnail_config = thumbnail_handler::ThumbnailConfig::default();
-    let thumbnail_state = thumbnail_handler::ThumbnailState::new(thumbnail_config);
-
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
-        .manage(thumbnail_state)
+        .setup(|app| {
+            // サムネイル状態を初期化（setup時にAppHandleを使用）
+            let thumbnail_config = thumbnail_handler::ThumbnailConfig::default();
+            let thumbnail_state =
+                match thumbnail_handler::ThumbnailState::new(thumbnail_config, app.handle()) {
+                    Ok(state) => state,
+                    Err(e) => {
+                        log::error!("ThumbnailStateの初期化に失敗: {}", e);
+                        return Err(e.into());
+                    }
+                };
+            app.manage(thumbnail_state);
+            Ok(())
+        })
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -62,6 +72,7 @@ pub fn run() {
             image_handler::read_comprehensive_image_info,
             // サムネイル操作
             thumbnail_handler::load_thumbnail_from_cache,
+            thumbnail_handler::load_thumbnails_batch,
             thumbnail_handler::clear_thumbnail_cache,
         ])
         .run(tauri::generate_context!())

@@ -59,3 +59,9 @@ export type ThumbnailInfo = Readonly<{
   width: number;
   height: number;
 }>;
+
+export type BatchThumbnailResult = Readonly<{
+  path: string;
+  thumbnail: ThumbnailInfo | null;
+  error: string | null;
+}>;

@@ -4,7 +4,7 @@ import { path } from "@tauri-apps/api";
 import { invoke } from "@tauri-apps/api/core";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { SUPPORTED_IMAGE_EXTS } from "./mine-type";
-import type { ThumbnailInfo } from "./rust-synced-types";
+import type { BatchThumbnailResult, ThumbnailInfo } from "./rust-synced-types";
 import { TaskQueue } from "./task-queue";
 
 // サムネイルからObjectURLを作成する関数
@@ -18,7 +18,7 @@ class GridViewer extends HTMLElement {
   readonly imageMap = new Map<string, ImageCard>();
   private imageLoadQueue = new TaskQueue(async (task) => {
     await this.updateImage(task.id);
-  }, 1);
+  }, 8); // 並行数を8に増加
 
   async connectedCallback() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -44,9 +44,52 @@ class GridViewer extends HTMLElement {
       const imageCard = document.createElement("image-card") as ImageCard;
       this.appendChild(imageCard);
       this.imageMap.set(imageFullPath, imageCard);
+    }
 
-      // キューにタスクを追加
-      this.imageLoadQueue.add({ id: imageFullPath });
+    // バッチ処理でサムネイルを生成
+    await this.loadThumbnailsBatch(imageFullPaths);
+  }
+
+  async loadThumbnailsBatch(imageFullPaths: string[]) {
+    console.log(
+      `バッチでサムネイル処理開始: ${imageFullPaths.length}個のファイル`,
+    );
+
+    try {
+      const results = (await invoke("load_thumbnails_batch", {
+        imagePaths: imageFullPaths,
+      })) as BatchThumbnailResult[];
+
+      for (const result of results) {
+        const imageCard = this.imageMap.get(result.path);
+        if (!imageCard) continue;
+
+        if (result.thumbnail) {
+          const url = createThumbnailUrl(result.thumbnail);
+          imageCard.setAttribute("src", url);
+          imageCard.setAttribute("width", result.thumbnail.width.toString());
+          imageCard.setAttribute("height", result.thumbnail.height.toString());
+          imageCard.setAttribute(
+            "href",
+            "view/?initialImagePath=" + encodeURIComponent(result.path),
+          );
+        } else if (result.error) {
+          console.error(
+            `Failed to load thumbnail: ${result.path}`,
+            result.error,
+          );
+        }
+      }
+
+      console.log("バッチサムネイル処理完了");
+    } catch (error) {
+      console.error("バッチサムネイル処理でエラー:", error);
+
+      // フォールバック: 個別処理
+      console.log("個別処理にフォールバック");
+      for (const imageFullPath of imageFullPaths) {
+        this.imageLoadQueue.add({ id: imageFullPath });
+      }
     }
   }
 
