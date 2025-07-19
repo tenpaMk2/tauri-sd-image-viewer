@@ -78,22 +78,28 @@ impl ThumbnailHandler {
 
     /// 画像ファイルパスからキャッシュキーを生成
     fn generate_cache_key(&self, image_path: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(image_path.as_bytes());
+        // パスのハッシュ部分
+        let mut path_hasher = Sha256::new();
+        path_hasher.update(image_path.as_bytes());
+        path_hasher.update(self.config.size.to_le_bytes());
+        path_hasher.update(self.config.quality.to_le_bytes());
+        let path_hash = hex::encode(path_hasher.finalize());
 
-        // ファイルサイズと更新時刻も含めて、ファイル内容の変更を検出
+        // ファイルの日付情報とサイズを取得
         if let Ok(metadata) = fs::metadata(image_path) {
-            hasher.update(metadata.len().to_le_bytes());
+            let size = metadata.len();
             if let Ok(modified) = metadata.modified() {
                 if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
-                    hasher.update(duration.as_secs().to_le_bytes());
+                    let timestamp = duration.as_secs();
+                    return format!("{}_{}_{}", path_hash, size, timestamp);
                 }
             }
+            // 日付情報が取得できない場合はサイズのみ
+            return format!("{}_{}", path_hash, size);
         }
 
-        hasher.update(self.config.size.to_le_bytes());
-        hasher.update(self.config.quality.to_le_bytes());
-        hex::encode(hasher.finalize())
+        // メタデータが取得できない場合はパスハッシュのみ
+        path_hash
     }
 
     /// キャッシュファイルのパスを取得
@@ -118,85 +124,79 @@ impl ThumbnailHandler {
             return false;
         }
 
-        // 元ファイルのメタデータを取得
-        let original_metadata = match fs::metadata(original_path) {
-            Ok(metadata) => {
-                log::info!("元ファイルのメタデータ取得成功: {}", original_path);
-                metadata
-            }
-            Err(e) => {
-                log::info!("元ファイルのメタデータ取得失敗: {} ({})", original_path, e);
-                return false;
-            }
-        };
-
-        let cache_metadata = match fs::metadata(cache_path) {
-            Ok(metadata) => {
-                log::info!(
-                    "キャッシュファイルのメタデータ取得成功: {}",
-                    cache_path.display()
-                );
-                metadata
-            }
-            Err(e) => {
-                log::info!(
-                    "キャッシュファイルのメタデータ取得失敗: {} ({})",
-                    cache_path.display(),
-                    e
-                );
-                return false;
-            }
-        };
-
-        // 更新時刻の比較
-        let cache_modified = cache_metadata
-            .modified()
-            .unwrap_or_else(|_| std::time::UNIX_EPOCH);
-        let original_modified = original_metadata
-            .modified()
-            .unwrap_or_else(|_| std::time::UNIX_EPOCH);
-
-        // キャッシュファイルが元ファイルより古い場合は無効
-        if cache_modified < original_modified {
-            log::info!(
-                "キャッシュ無効: キャッシュ更新時刻 < 元ファイル更新時刻 ({:?} < {:?})",
-                cache_modified,
-                original_modified
-            );
+        // 元ファイルが存在するかチェック
+        if !Path::new(original_path).exists() {
+            log::info!("元ファイルが存在しません: {}", original_path);
             return false;
         }
 
-        // ファイルサイズの比較（ファイルが差し替えられた場合の検出）
-        let original_size = original_metadata.len();
-
-        // キャッシュファイル名に含まれるべき元ファイルの情報をチェック
-        // キャッシュキーは元ファイルのパス、サイズ、設定から生成されているので、
-        // 現在の元ファイルから生成されるキャッシュキーと一致するかチェック
-        let expected_cache_key = self.generate_cache_key(original_path);
-        let expected_cache_path = self.get_cache_file_path(&expected_cache_key);
-
-        let cache_key_matches = match expected_cache_path {
-            Ok(expected_path) => expected_path == cache_path,
-            Err(_) => false,
-        };
-
-        if !cache_key_matches {
-            log::info!(
-                "キャッシュ無効: キャッシュキーが一致しません（ファイル内容が変更された可能性）"
-            );
-            return false;
-        }
-
-        log::info!(
-            "キャッシュ有効: 更新時刻・キャッシュキーともに一致 (キャッシュ: {:?}, 元ファイル: {:?}, サイズ: {})",
-            cache_modified,
-            original_modified,
-            original_size
-        );
-
+        // キャッシュキーにファイルサイズと更新時刻が含まれているため、
+        // キャッシュファイルが存在すれば有効とみなす
+        log::info!("キャッシュ有効: {}", cache_path.display());
         true
     }
 
+    /// 指定されたパスの古いキャッシュファイルを削除
+    fn remove_old_cache_files(&self, image_path: &str) -> Result<(), String> {
+        let cache_dir = self
+            .cache_dir
+            .as_ref()
+            .ok_or("キャッシュディレクトリが初期化されていません")?;
+
+        if !cache_dir.exists() {
+            return Ok(());
+        }
+
+        // パスのハッシュ部分を生成（現在のファイルと同じパスを持つキャッシュを特定するため）
+        let mut path_hasher = Sha256::new();
+        path_hasher.update(image_path.as_bytes());
+        path_hasher.update(self.config.size.to_le_bytes());
+        path_hasher.update(self.config.quality.to_le_bytes());
+        let path_hash = hex::encode(path_hasher.finalize());
+
+        let entries = fs::read_dir(cache_dir)
+            .map_err(|e| format!("キャッシュディレクトリの読み取りに失敗: {}", e))?;
+
+        let mut removed_count = 0;
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(file_name) = path.file_name() {
+                        if let Some(name_str) = file_name.to_str() {
+                            // ファイル名がパスハッシュで始まり、.jpgで終わる場合は同じパスのキャッシュ
+                            if name_str.starts_with(&path_hash) && name_str.ends_with(".jpg") {
+                                match fs::remove_file(&path) {
+                                    Ok(_) => {
+                                        removed_count += 1;
+                                        log::info!(
+                                            "古いキャッシュファイルを削除: {}",
+                                            path.display()
+                                        );
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "古いキャッシュファイルの削除に失敗: {} ({})",
+                                            path.display(),
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if removed_count > 0 {
+            log::info!("{}個の古いキャッシュファイルを削除しました", removed_count);
+        }
+
+        Ok(())
+    }
+
+    /// サムネイルを生成または取得
     /// サムネイルを生成または取得
     pub fn get_thumbnail<R: Runtime>(
         &mut self,
@@ -221,6 +221,11 @@ impl ThumbnailHandler {
                 height: self.config.size,
                 mime_type: "image/jpeg".to_string(),
             });
+        }
+
+        // キャッシュが無効な場合、古いキャッシュファイルを削除
+        if let Err(e) = self.remove_old_cache_files(image_path) {
+            log::warn!("古いキャッシュファイルの削除に失敗: {}", e);
         }
 
         // 新しいサムネイルを生成
