@@ -52,7 +52,6 @@ impl ThumbnailHandler {
         if self.cache_dir.is_none() {
             let cache_dir = Self::get_cache_directory(app)?;
 
-            // キャッシュディレクトリを作成
             if !cache_dir.exists() {
                 fs::create_dir_all(&cache_dir)
                     .map_err(|e| format!("キャッシュディレクトリの作成に失敗: {}", e))?;
@@ -66,14 +65,10 @@ impl ThumbnailHandler {
 
     /// キャッシュディレクトリのパスを取得
     pub fn get_cache_directory<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-        // TauriのPathResolverを使用してアプリケーション専用のキャッシュディレクトリを取得
-        let cache_dir = app
-            .path()
+        app.path()
             .app_cache_dir()
-            .map_err(|e| format!("キャッシュディレクトリの取得に失敗: {}", e))?;
-
-        // thumbnailsサブディレクトリを追加
-        Ok(cache_dir.join("thumbnails"))
+            .map(|cache_dir| cache_dir.join("thumbnails"))
+            .map_err(|e| format!("キャッシュディレクトリの取得に失敗: {}", e))
     }
 
     /// パスのハッシュ部分を生成（主キー：ファイルパスのみ）
@@ -126,21 +121,23 @@ impl ThumbnailHandler {
             original_path
         );
 
-        if !cache_path.exists() {
-            log::info!("キャッシュファイルが存在しません: {}", cache_path.display());
-            return false;
-        }
+        let cache_exists = cache_path.exists();
+        let original_exists = Path::new(original_path).exists();
 
-        // 元ファイルが存在するかチェック
-        if !Path::new(original_path).exists() {
-            log::info!("元ファイルが存在しません: {}", original_path);
-            return false;
+        match (cache_exists, original_exists) {
+            (false, _) => {
+                log::info!("キャッシュファイルが存在しません: {}", cache_path.display());
+                false
+            }
+            (true, false) => {
+                log::info!("元ファイルが存在しません: {}", original_path);
+                false
+            }
+            (true, true) => {
+                log::info!("キャッシュ有効: {}", cache_path.display());
+                true
+            }
         }
-
-        // キャッシュキーにファイルサイズと更新時刻が含まれているため、
-        // キャッシュファイルが存在すれば有効とみなす
-        log::info!("キャッシュ有効: {}", cache_path.display());
-        true
     }
 
     /// キャッシュファイルが古いキャッシュかどうかをチェック
@@ -201,7 +198,6 @@ impl ThumbnailHandler {
     }
 
     /// サムネイルを生成または取得
-    /// サムネイルを生成または取得
     pub fn get_thumbnail<R: Runtime>(
         &mut self,
         image_path: &str,
@@ -247,20 +243,15 @@ impl ThumbnailHandler {
 
     /// サムネイルを生成
     fn generate_thumbnail(&self, image_path: &str) -> Result<ThumbnailInfo, String> {
-        // 画像を読み込み
         let img =
             image::open(image_path).map_err(|e| format!("画像ファイルの読み込みに失敗: {}", e))?;
 
-        // サムネイルサイズにリサイズ
         let thumbnail = img.thumbnail(self.config.size, self.config.size);
         let (width, height) = thumbnail.dimensions();
 
-        // JPEGにエンコード
         let mut buffer = Vec::new();
-        let mut cursor = Cursor::new(&mut buffer);
-
         thumbnail
-            .write_to(&mut cursor, ImageFormat::Jpeg)
+            .write_to(&mut Cursor::new(&mut buffer), ImageFormat::Jpeg)
             .map_err(|e| format!("サムネイルのエンコードに失敗: {}", e))?;
 
         Ok(ThumbnailInfo {
@@ -276,64 +267,52 @@ impl ThumbnailHandler {
         self.ensure_cache_dir(app)?;
 
         let cache_dir = self.cache_dir.as_ref().unwrap();
+        if !cache_dir.exists() {
+            return Ok(());
+        }
 
-        if cache_dir.exists() {
-            // ディレクトリ内のファイルを読み取り
-            let entries = fs::read_dir(cache_dir).map_err(|e| {
-                let error_msg = format!(
-                    "キャッシュディレクトリの読み取りに失敗: {} (パス: {})",
-                    e,
-                    cache_dir.display()
-                );
-                log::error!("{}", error_msg);
-                error_msg
-            })?;
+        let entries = fs::read_dir(cache_dir).map_err(|e| {
+            let error_msg = format!(
+                "キャッシュディレクトリの読み取りに失敗: {} (パス: {})",
+                e,
+                cache_dir.display()
+            );
+            log::error!("{}", error_msg);
+            error_msg
+        })?;
 
-            let mut deleted_count = 0;
-            let mut error_count = 0;
+        let mut deleted_count = 0;
+        let mut error_count = 0;
 
-            for entry in entries {
-                match entry {
-                    Ok(entry) => {
-                        let path = entry.path();
-                        if path.is_file() {
-                            match fs::remove_file(&path) {
-                                Ok(_) => {
-                                    deleted_count += 1;
-                                }
-                                Err(e) => {
-                                    error_count += 1;
-                                    log::warn!(
-                                        "ファイルの削除に失敗: {} (パス: {})",
-                                        e,
-                                        path.display()
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error_count += 1;
-                        log::warn!("ディレクトリエントリの読み取りに失敗: {}", e);
-                    }
-                }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
             }
 
-            log::info!(
-                "キャッシュクリア完了: {}個のファイルを削除、{}個のエラー",
-                deleted_count,
-                error_count
-            );
-
-            if error_count > 0 {
-                return Err(format!(
-                    "一部のファイルの削除に失敗しました（エラー数: {}）",
-                    error_count
-                ));
+            match fs::remove_file(&path) {
+                Ok(_) => deleted_count += 1,
+                Err(e) => {
+                    error_count += 1;
+                    log::warn!("ファイルの削除に失敗: {} ({})", e, path.display());
+                }
             }
         }
 
-        Ok(())
+        log::info!(
+            "キャッシュクリア完了: {}個のファイルを削除、{}個のエラー",
+            deleted_count,
+            error_count
+        );
+
+        if error_count > 0 {
+            Err(format!(
+                "一部のファイルの削除に失敗しました（エラー数: {}）",
+                error_count
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -352,6 +331,17 @@ impl ThumbnailState {
     }
 }
 
+/// Mutexロックを取得し、PoisonErrorを適切にハンドリング
+fn acquire_handler_lock<T>(
+    mutex_result: Result<T, std::sync::PoisonError<T>>,
+) -> Result<T, String> {
+    mutex_result.map_err(|e| {
+        let error_msg = format!("サムネイルハンドラーのロックに失敗: {:?}", e);
+        log::error!("{}", error_msg);
+        error_msg
+    })
+}
+
 /// サムネイルを取得するTauriコマンド
 #[tauri::command]
 pub fn get_thumbnail<R: Runtime>(
@@ -359,12 +349,7 @@ pub fn get_thumbnail<R: Runtime>(
     app: AppHandle<R>,
     state: tauri::State<ThumbnailState>,
 ) -> Result<ThumbnailInfo, String> {
-    let mut handler = state.handler.lock().map_err(|e| {
-        let error_msg = format!("サムネイルハンドラーのロックに失敗: {:?}", e);
-        log::error!("{}", error_msg);
-        error_msg
-    })?;
-
+    let mut handler = acquire_handler_lock(state.handler.lock())?;
     handler.get_thumbnail(&image_path, &app)
 }
 
@@ -374,9 +359,6 @@ pub fn clear_thumbnail_cache<R: Runtime>(
     app: AppHandle<R>,
     state: tauri::State<ThumbnailState>,
 ) -> Result<(), String> {
-    let mut handler = state
-        .handler
-        .lock()
-        .map_err(|_| "サムネイルハンドラーのロックに失敗")?;
+    let mut handler = acquire_handler_lock(state.handler.lock())?;
     handler.clear_cache_safe(&app)
 }
