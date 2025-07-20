@@ -1,4 +1,4 @@
-use image::{GenericImageView, ImageFormat};
+use image::GenericImageView;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -24,7 +24,7 @@ impl Default for ThumbnailConfig {
 }
 
 /// サムネイル情報
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThumbnailInfo {
     pub data: Vec<u8>,
     pub width: u32,
@@ -33,7 +33,7 @@ pub struct ThumbnailInfo {
 }
 
 /// バッチサムネイル結果
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchThumbnailResult {
     pub path: String,
     pub thumbnail: Option<ThumbnailInfo>,
@@ -170,14 +170,14 @@ impl ThumbnailHandler {
         image_paths: &[String],
         _app: &AppHandle<R>,
     ) -> Vec<BatchThumbnailResult> {
-        // CPUコア数の70%を使用（UIレンダリング用にコアを残す）
+        // CPUコア数の75%を使用（UIレンダリング用にコアを残すが、より積極的に）
         let available_cores = std::thread::available_parallelism()
             .map(|cores| cores.get())
             .unwrap_or(4); // フォールバック値
-        let max_threads = std::cmp::max(1, (available_cores as f64 * 0.7) as usize);
+        let max_threads = std::cmp::max(1, (available_cores as f64 * 0.75) as usize);
 
         log::info!(
-            "利用可能コア: {}, 使用コア: {}",
+            "利用可能コア: {}, 使用コア: {} (75%利用)",
             available_cores,
             max_threads
         );
@@ -284,12 +284,19 @@ impl ThumbnailHandler {
         let img =
             image::open(image_path).map_err(|e| format!("画像ファイルの読み込みに失敗: {}", e))?;
 
+        // サムネイル生成（アスペクト比を維持）
         let thumbnail = img.thumbnail(self.config.size, self.config.size);
         let (width, height) = thumbnail.dimensions();
 
         let mut buffer = Vec::new();
+
+        // 設定されたJPEG品質を使用
+        let mut cursor = Cursor::new(&mut buffer);
+        let encoder =
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, self.config.quality);
+
         thumbnail
-            .write_to(&mut Cursor::new(&mut buffer), ImageFormat::Jpeg)
+            .write_with_encoder(encoder)
             .map_err(|e| format!("サムネイルのエンコードに失敗: {}", e))?;
 
         Ok(ThumbnailInfo {
@@ -364,44 +371,56 @@ impl ThumbnailState {
     }
 }
 
-/// サムネイルをキャッシュから読み込む（なければ生成）Tauriコマンド
+/// サムネイルをキャッシュから読み込む（なければ生成）Tauriコマンド（非同期版）
 #[tauri::command]
-pub fn load_thumbnail_from_cache<R: Runtime>(
+pub async fn load_thumbnail_from_cache<R: Runtime>(
     image_path: String,
     app: AppHandle<R>,
-    state: tauri::State<ThumbnailState>,
+    state: tauri::State<'_, ThumbnailState>,
 ) -> Result<ThumbnailInfo, String> {
+    // シンプルに非同期で処理
     state.handler.get_thumbnail(&image_path, &app)
 }
 
-/// バッチでサムネイルを生成または取得するTauriコマンド
+/// バッチでサムネイルを生成または取得するTauriコマンド（非同期版）
 #[tauri::command]
-pub fn load_thumbnails_batch<R: Runtime>(
+pub async fn load_thumbnails_batch<R: Runtime>(
     image_paths: Vec<String>,
     app: AppHandle<R>,
-    state: tauri::State<ThumbnailState>,
-) -> Vec<BatchThumbnailResult> {
+    state: tauri::State<'_, ThumbnailState>,
+) -> Result<Vec<BatchThumbnailResult>, String> {
     let start_time = std::time::Instant::now();
     let count = image_paths.len();
 
+    let processing_start = std::time::Instant::now();
     let results = state.handler.get_thumbnails_batch(&image_paths, &app);
+    let processing_duration = processing_start.elapsed();
 
-    let duration = start_time.elapsed();
+    let total_duration = start_time.elapsed();
+
+    // データサイズを計算（クローンを避ける）
+    let total_data_size: usize = results
+        .iter()
+        .filter_map(|r| r.thumbnail.as_ref())
+        .map(|t| t.data.len())
+        .sum();
+
     log::info!(
-        "バッチサムネイル処理完了: {}ファイル, {:.1}ms ({:.1}ms/ファイル)",
+        "バッチ処理詳細統計: {}ファイル, 処理時間: {:.1}ms, 総時間: {:.1}ms, データサイズ: {:.2}MB",
         count,
-        duration.as_secs_f64() * 1000.0,
-        duration.as_secs_f64() * 1000.0 / count as f64
+        processing_duration.as_secs_f64() * 1000.0,
+        total_duration.as_secs_f64() * 1000.0,
+        total_data_size as f64 / 1024.0 / 1024.0
     );
 
-    results
+    Ok(results)
 }
 
-/// サムネイルキャッシュをクリアするTauriコマンド
+/// サムネイルキャッシュをクリアするTauriコマンド（非同期版）
 #[tauri::command]
-pub fn clear_thumbnail_cache<R: Runtime>(
+pub async fn clear_thumbnail_cache<R: Runtime>(
     app: AppHandle<R>,
-    state: tauri::State<ThumbnailState>,
+    state: tauri::State<'_, ThumbnailState>,
 ) -> Result<(), String> {
     state.handler.clear_cache_safe(&app)
 }

@@ -5,7 +5,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { SUPPORTED_IMAGE_EXTS } from "./mine-type";
 import type { BatchThumbnailResult, ThumbnailInfo } from "./rust-synced-types";
-import { TaskQueue } from "./task-queue";
 
 // サムネイルからObjectURLを作成する関数
 const createThumbnailUrl = (thumbnailInfo: ThumbnailInfo): string => {
@@ -16,9 +15,6 @@ const createThumbnailUrl = (thumbnailInfo: ThumbnailInfo): string => {
 
 class GridViewer extends HTMLElement {
   readonly imageMap = new Map<string, ImageCard>();
-  private imageLoadQueue = new TaskQueue(async (task) => {
-    await this.updateImage(task.id);
-  }, 8); // 並行数を8に増加
 
   async connectedCallback() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -39,110 +35,81 @@ class GridViewer extends HTMLElement {
         .sort(),
     );
 
-    // 先にDOM更新
+    // 先にDOM更新（プレースホルダー表示）
     for (const imageFullPath of imageFullPaths) {
       const imageCard = document.createElement("image-card") as ImageCard;
       this.appendChild(imageCard);
       this.imageMap.set(imageFullPath, imageCard);
     }
 
-    // バッチ処理でサムネイルを生成
+    // チャンクごとの並列処理でサムネイルを生成
     await this.loadThumbnailsBatch(imageFullPaths);
   }
 
-  async loadThumbnailsBatch(imageFullPaths: string[]) {
-    console.log(
-      `バッチでサムネイル処理開始: ${imageFullPaths.length}個のファイル`,
+  // 1枚の画像を即座に更新
+  private updateSingleImage(imagePath: string, thumbnail: ThumbnailInfo) {
+    const imageCard = this.imageMap.get(imagePath);
+    if (!imageCard) return;
+
+    const url = createThumbnailUrl(thumbnail);
+
+    // ImageCardの属性を設定してサムネイル表示
+    imageCard.setAttribute("src", url);
+    imageCard.setAttribute(
+      "href",
+      `/view?initialImagePath=${encodeURIComponent(imagePath)}`,
     );
-
-    // 小さなチャンクで逐次処理（UI応答性重視）
-    await this.loadThumbnailsSequentially(imageFullPaths);
-
-    console.log("全サムネイル処理完了");
+    imageCard.setAttribute("width", thumbnail.width.toString());
+    imageCard.setAttribute("height", thumbnail.height.toString());
   }
 
-  // 小さなチャンクで逐次処理（UIブロックを最小化）
-  private async loadThumbnailsSequentially(imageFullPaths: string[]) {
-    const CHUNK_SIZE = 5; // 非常に小さなチャンク
+  // チャンクごとの並列処理（効率的なバッチ処理）
+  async loadThumbnailsBatch(imageFullPaths: string[]) {
+    const CHUNK_SIZE = 16; // チャンクサイズ
+    const chunks = [];
 
+    // 配列をチャンクに分割
     for (let i = 0; i < imageFullPaths.length; i += CHUNK_SIZE) {
-      const chunk = imageFullPaths.slice(i, i + CHUNK_SIZE);
-      const chunkIndex = Math.floor(i / CHUNK_SIZE) + 1;
-      const totalChunks = Math.ceil(imageFullPaths.length / CHUNK_SIZE);
+      chunks.push(imageFullPaths.slice(i, i + CHUNK_SIZE));
+    }
 
-      console.log(
-        `チャンク ${chunkIndex}/${totalChunks} 処理開始 (${chunk.length}ファイル)`,
-      );
+    console.log(
+      `チャンク処理開始: ${chunks.length}チャンク, チャンクサイズ: ${CHUNK_SIZE}`,
+    );
+
+    // チャンクごとに処理
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+      const chunk = chunks[chunkIndex];
 
       try {
-        const chunkStartTime = performance.now();
+        const startTime = performance.now();
 
+        // バッチでサムネイルを取得
         const results = (await invoke("load_thumbnails_batch", {
           imagePaths: chunk,
         })) as BatchThumbnailResult[];
 
-        const chunkRustTime = performance.now() - chunkStartTime;
-        console.log(
-          `チャンク ${chunkIndex}/${totalChunks} 処理時間: ${chunkRustTime.toFixed(2)}ms`,
-        );
+        const processingTime = performance.now() - startTime;
 
-        // 即座にDOM更新
-        this.updateDOMImmediate(results);
-
-        // UI応答性のための短い待機
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } catch (error) {
-        console.error(`チャンク ${chunkIndex} エラー:`, error);
-        // エラー時は個別処理にフォールバック
-        for (const path of chunk) {
-          this.imageLoadQueue.add({ id: path });
+        // 結果を即座にUI更新
+        for (const result of results) {
+          if (result.thumbnail) {
+            this.updateSingleImage(result.path, result.thumbnail);
+          } else if (result.error) {
+            console.error(`サムネイル処理エラー: ${result.path}`, result.error);
+          }
         }
-      }
-    }
-  }
 
-  // DOM更新を即座に実行
-  private updateDOMImmediate(results: BatchThumbnailResult[]) {
-    for (const result of results) {
-      const imageCard = this.imageMap.get(result.path);
-      if (!imageCard) continue;
-
-      if (result.thumbnail) {
-        const url = createThumbnailUrl(result.thumbnail);
-        imageCard.setAttribute("src", url);
-        imageCard.setAttribute("width", result.thumbnail.width.toString());
-        imageCard.setAttribute("height", result.thumbnail.height.toString());
-        imageCard.setAttribute(
-          "href",
-          "view/?initialImagePath=" + encodeURIComponent(result.path),
+        console.log(
+          `チャンク ${chunkIndex + 1}/${chunks.length} 完了: ${processingTime.toFixed(1)}ms (${chunk.length}ファイル)`,
         );
-      } else if (result.error) {
-        console.error(`Failed to load thumbnail: ${result.path}`, result.error);
+      } catch (error) {
+        console.error(`チャンク ${chunkIndex + 1} 処理エラー:`, error);
       }
     }
+
+    console.log("全チャンク処理完了");
   }
-
-  updateImage = async (imageFullPath: string) => {
-    try {
-      // サムネイルを生成または取得
-      const thumbnailResponse = (await invoke("load_thumbnail_from_cache", {
-        imagePath: imageFullPath,
-      })) as ThumbnailInfo;
-
-      // ObjectURLを作成
-      const url = createThumbnailUrl(thumbnailResponse);
-
-      const imageCard = this.imageMap.get(imageFullPath)!;
-      imageCard.setAttribute("src", url);
-      imageCard.setAttribute("width", thumbnailResponse.width.toString());
-      imageCard.setAttribute("height", thumbnailResponse.height.toString());
-      imageCard.setAttribute(
-        "href",
-        "view/?initialImagePath=" + encodeURIComponent(imageFullPath),
-      );
-    } catch (error) {
-      console.error(`Failed to load thumbnail: ${imageFullPath}`, error);
-    }
-  };
 }
+
 customElements.define("grid-viewer", GridViewer);
