@@ -16,11 +16,10 @@ pub struct PngImageInfo {
     pub height: u32,
     pub bit_depth: u8,
     pub color_type: String,
-    pub file_size_bytes: u64,
     pub sd_parameters: Option<SdParameters>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExifImageInfo {
     pub rating: Option<u16>,
     pub create_date: Option<String>,

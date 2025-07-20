@@ -11,7 +11,8 @@ use webp::Encoder;
 #[derive(Debug, Clone)]
 pub struct ThumbnailConfig {
     pub size: u32,
-    pub quality: u8, // WebP品質 (1-100)
+    pub quality: u8,            // WebP品質 (1-100)
+    pub include_metadata: bool, // メタデータを埋め込むかどうか
 }
 
 impl Default for ThumbnailConfig {
@@ -19,6 +20,7 @@ impl Default for ThumbnailConfig {
         Self {
             size: 300,
             quality: 50,
+            include_metadata: true,
         }
     }
 }
@@ -30,6 +32,7 @@ pub struct ThumbnailInfo {
     pub width: u32,
     pub height: u32,
     pub mime_type: String,
+    pub metadata: Option<crate::webp_metadata::ThumbnailMetadata>,
 }
 
 /// バッチサムネイル結果
@@ -172,19 +175,19 @@ impl ThumbnailHandler {
         image_paths: &[String],
         _app: &AppHandle<R>,
     ) -> Vec<BatchThumbnailResult> {
-        // CPUコア数の75%を使用（UIレンダリング用にコアを残すが、より積極的に）
+        // CPUコア数の75%を使用
         let available_cores = std::thread::available_parallelism()
             .map(|cores| cores.get())
             .unwrap_or(4); // フォールバック値
         let max_threads = std::cmp::max(1, (available_cores as f64 * 0.75) as usize);
 
         log::info!(
-            "利用可能コア: {}, 使用コア: {} (75%利用)",
+            "利用可能コア: {}, 使用コア: {}",
             available_cores,
             max_threads
         );
 
-        // 並列処理でサムネイルを生成（制限付き並列度）
+        // 並列処理でサムネイルを生成（高並列度）
         rayon::ThreadPoolBuilder::new()
             .num_threads(max_threads)
             .build()
@@ -224,11 +227,17 @@ impl ThumbnailHandler {
             let data = fs::read(&cache_path)
                 .map_err(|e| format!("キャッシュファイルの読み込みに失敗: {}", e))?;
 
+            // 既存のWebPからメタデータを読み取り
+            let metadata = crate::webp_metadata::extract_metadata_from_webp(&data)
+                .ok()
+                .flatten();
+
             return Ok(ThumbnailInfo {
                 data,
                 width: self.config.size,
                 height: self.config.size,
                 mime_type: "image/webp".to_string(),
+                metadata,
             });
         }
 
@@ -237,7 +246,7 @@ impl ThumbnailHandler {
             log::warn!("古いキャッシュファイルの削除に失敗: {}", e);
         }
 
-        // 新しいサムネイルを生成
+        // 新しいサムネイルを生成（統合版）
         let thumbnail_info = self.generate_thumbnail(image_path)?;
 
         // キャッシュに保存
@@ -250,29 +259,81 @@ impl ThumbnailHandler {
 
     /// サムネイルを生成
     fn generate_thumbnail(&self, image_path: &str) -> Result<ThumbnailInfo, String> {
-        let img =
-            image::open(image_path).map_err(|e| format!("画像ファイルの読み込みに失敗: {}", e))?;
+        // 1. ファイルを一度だけ読み込み（統一されたアプローチ）
+        let file_data =
+            std::fs::read(image_path).map_err(|e| format!("ファイル読み込みエラー: {}", e))?;
 
-        // サムネイル生成（アスペクト比を維持）
+        // 2. バイトデータから画像を読み込み
+        let img = crate::image_handler::load_image_from_bytes(&file_data)?;
+
+        // 3. サムネイル生成（アスペクト比を維持）
         let thumbnail = img.thumbnail(self.config.size, self.config.size);
         let (width, height) = thumbnail.dimensions();
 
-        // RGBAバイト配列に変換
+        // 4. RGBAバイト配列に変換
         let rgba_image = thumbnail.to_rgba8();
         let rgba_data = rgba_image.as_raw();
 
-        // webpクレートを使用して品質設定付きでエンコード
-        let encoder = Encoder::from_rgba(rgba_data, width, height);
+        // 5. 条件付きでメタデータを軽量読み取り（同じバイトデータから）
+        let metadata = if self.config.include_metadata {
+            self.extract_metadata_from_bytes(&file_data, image_path)
+                .ok()
+        } else {
+            None
+        };
 
-        // シンプルなエンコード（品質のみ指定）
-        let webp_memory = encoder.encode(self.config.quality as f32);
-        let encoded_data = webp_memory.to_vec();
+        // 6. メタデータ付きWebPを一度で生成
+        let webp_data = if let Some(ref meta) = metadata {
+            let encoder =
+                crate::webp_metadata::WebPMetadataEncoder::new(self.config.quality as f32);
+            encoder.encode_with_metadata(rgba_data, width, height, Some(meta.clone()))?
+        } else {
+            // メタデータがない場合は従来の方式
+            let encoder = Encoder::from_rgba(rgba_data, width, height);
+            let webp_memory = encoder.encode(self.config.quality as f32);
+            webp_memory.to_vec()
+        };
 
         Ok(ThumbnailInfo {
-            data: encoded_data,
+            data: webp_data,
             width,
             height,
             mime_type: "image/webp".to_string(),
+            metadata,
+        })
+    }
+
+    /// バイトデータからメタデータを抽出（統一アプローチ）
+    fn extract_metadata_from_bytes(
+        &self,
+        file_data: &[u8],
+        image_path: &str,
+    ) -> Result<crate::webp_metadata::ThumbnailMetadata, String> {
+        // ファイル拡張子を判定
+        let file_extension = crate::exif_handler::determine_file_extension(image_path);
+
+        // EXIF情報をバイトデータから読み取り（直接処理）
+        let exif_info = crate::exif_handler::read_exif_from_bytes(file_data, file_extension);
+
+        // SDパラメーター情報をバイトデータから読み取り（PNGの場合のみ）
+        let sd_parameters = if image_path.to_lowercase().ends_with(".png") {
+            crate::png_handler::read_png_sd_parameters_from_bytes(file_data)
+        } else {
+            None
+        };
+
+        // デバッグログ：抽出されたメタデータの情報
+        log::debug!(
+            "メタデータ抽出: {} - EXIF rating: {:?}, SD params: {}",
+            image_path.split('/').last().unwrap_or("unknown"),
+            exif_info.as_ref().and_then(|e| e.rating),
+            sd_parameters.is_some()
+        );
+
+        Ok(crate::webp_metadata::ThumbnailMetadata {
+            exif_info,
+            sd_parameters,
+            cache_version: 1,
         })
     }
 
@@ -350,28 +411,41 @@ pub async fn load_thumbnails_batch<R: Runtime>(
     let start_time = std::time::Instant::now();
     let count = image_paths.len();
 
-    let processing_start = std::time::Instant::now();
-    let results = state.handler.process_thumbnails_batch(&image_paths, &app);
-    let processing_duration = processing_start.elapsed();
+    // メタデータ情報をデバッグログに出力
+    log::info!(
+        "サムネイル生成開始: {}ファイル, メタデータ埋め込み: {}",
+        count,
+        state.handler.config.include_metadata
+    );
+
+    // rayonの並列処理に全てを任せる（チャンク制御不要）
+    let all_results = state.handler.process_thumbnails_batch(&image_paths, &app);
 
     let total_duration = start_time.elapsed();
 
-    // データサイズを計算（クローンを避ける）
-    let total_data_size: usize = results
+    // データサイズを計算
+    let total_data_size: usize = all_results
         .iter()
         .filter_map(|r| r.thumbnail.as_ref())
         .map(|t| t.data.len())
         .sum();
 
+    // メタデータ統計をログ出力
+    let metadata_count = all_results
+        .iter()
+        .filter_map(|r| r.thumbnail.as_ref())
+        .filter(|t| t.metadata.is_some())
+        .count();
+
     log::info!(
-        "バッチ処理詳細統計: {}ファイル, 処理時間: {:.1}ms, 総時間: {:.1}ms, データサイズ: {:.2}MB",
+        "バッチ処理完了: {}ファイル, 総時間: {:.1}ms, データサイズ: {:.2}MB, メタデータ付き: {}個",
         count,
-        processing_duration.as_secs_f64() * 1000.0,
         total_duration.as_secs_f64() * 1000.0,
-        total_data_size as f64 / 1024.0 / 1024.0
+        total_data_size as f64 / 1024.0 / 1024.0,
+        metadata_count
     );
 
-    Ok(results)
+    Ok(all_results)
 }
 
 /// サムネイルキャッシュをクリアするTauriコマンド（非同期版）
@@ -381,4 +455,26 @@ pub async fn clear_thumbnail_cache<R: Runtime>(
     state: tauri::State<'_, ThumbnailState>,
 ) -> Result<(), String> {
     state.handler.clear_cache_safe(&app)
+}
+
+/// サムネイルからメタデータを抽出するTauriコマンド
+#[tauri::command]
+pub async fn extract_thumbnail_metadata<R: Runtime>(
+    image_path: String,
+    _app: AppHandle<R>,
+    state: tauri::State<'_, ThumbnailState>,
+) -> Result<Option<crate::webp_metadata::ThumbnailMetadata>, String> {
+    let cache_key = state.handler.generate_cache_key(&image_path);
+    let cache_path = state.handler.cache_dir.join(format!("{}.webp", cache_key));
+
+    // キャッシュファイルが存在するかチェック
+    if !cache_path.exists() {
+        return Ok(None);
+    }
+
+    // WebPファイルからメタデータを抽出
+    let data = std::fs::read(&cache_path)
+        .map_err(|e| format!("キャッシュファイルの読み込みに失敗: {}", e))?;
+
+    crate::webp_metadata::extract_metadata_from_webp(&data)
 }

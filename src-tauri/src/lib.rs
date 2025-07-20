@@ -6,6 +6,7 @@ mod image_types;
 mod png_handler;
 mod sd_parameters;
 mod thumbnail_handler;
+mod webp_metadata;
 use chrono::Local;
 use colored::*;
 use log;
@@ -16,8 +17,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-            // サムネイル状態を初期化（setup時にAppHandleを使用）
-            let thumbnail_config = thumbnail_handler::ThumbnailConfig::default();
+            // サムネイル状態を初期化（メタデータ埋め込み有効）
+            let thumbnail_config = thumbnail_handler::ThumbnailConfig {
+                size: 300,
+                quality: 50,
+                include_metadata: true, // メタデータを埋め込んでフロントエンドで活用
+            };
             let thumbnail_state =
                 match thumbnail_handler::ThumbnailState::new(thumbnail_config, app.handle()) {
                     Ok(state) => state,
@@ -73,6 +78,7 @@ pub fn run() {
             // サムネイル操作
             thumbnail_handler::load_thumbnails_batch,
             thumbnail_handler::clear_thumbnail_cache,
+            thumbnail_handler::extract_thumbnail_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

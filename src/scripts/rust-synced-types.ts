@@ -53,11 +53,18 @@ export type ComprehensiveImageInfo = Readonly<{
   exif_info: ExifImageInfo;
 }>;
 
+export type ThumbnailMetadata = Readonly<{
+  exif_info: ExifImageInfo | null;
+  sd_parameters: SdParameters | null;
+  cache_version: number;
+}>;
+
 export type ThumbnailInfo = Readonly<{
   data: number[];
-  mime_type: string;
   width: number;
   height: number;
+  mime_type: string;
+  metadata: ThumbnailMetadata | null;
 }>;
 
 export type BatchThumbnailResult = Readonly<{

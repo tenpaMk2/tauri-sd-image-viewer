@@ -12,13 +12,13 @@ static FIELD_REGEX: Lazy<Regex> = Lazy::new(|| {
         .expect("Invalid regex pattern for SD fields")
 });
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdTag {
     pub name: String,
     pub weight: Option<f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdParameters {
     pub positive_sd_tags: Vec<SdTag>,
     pub negative_sd_tags: Vec<SdTag>,

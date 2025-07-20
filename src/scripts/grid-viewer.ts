@@ -68,6 +68,44 @@ class GridViewer extends HTMLElement {
     );
     imageCard.setAttribute("width", thumbnail.width.toString());
     imageCard.setAttribute("height", thumbnail.height.toString());
+
+    // メタデータがある場合、追加情報を設定（実験的）
+    if (thumbnail.metadata) {
+      const { exif_info, sd_parameters } = thumbnail.metadata;
+
+      // EXIF Rating情報をdata属性に設定
+      if (exif_info?.rating !== null && exif_info?.rating !== undefined) {
+        imageCard.setAttribute("data-rating", exif_info.rating.toString());
+        imageCard.setAttribute("data-has-rating", "true");
+      } else {
+        imageCard.setAttribute("data-rating", "0");
+        imageCard.setAttribute("data-has-rating", "false");
+      }
+
+      // SD Parameters情報もdata属性に設定（実験的）
+      if (sd_parameters) {
+        imageCard.setAttribute("data-has-sd-params", "true");
+        if (sd_parameters.model) {
+          imageCard.setAttribute("data-sd-model", sd_parameters.model);
+        }
+        if (sd_parameters.seed) {
+          imageCard.setAttribute("data-sd-seed", sd_parameters.seed);
+        }
+      } else {
+        imageCard.setAttribute("data-has-sd-params", "false");
+      }
+
+      // キャッシュバージョン情報
+      imageCard.setAttribute(
+        "data-cache-version",
+        thumbnail.metadata.cache_version.toString(),
+      );
+    } else {
+      // メタデータがない場合のフォールバック
+      imageCard.setAttribute("data-rating", "0");
+      imageCard.setAttribute("data-has-rating", "false");
+      imageCard.setAttribute("data-has-sd-params", "false");
+    }
   }
 
   // チャンクごとの並列処理（効率的なバッチ処理）
