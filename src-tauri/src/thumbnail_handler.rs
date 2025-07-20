@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager, Runtime};
 #[derive(Debug, Clone)]
 pub struct ThumbnailConfig {
     pub size: u32,
-    pub quality: u8, // JPEG品質 (1-100)
+    pub quality: u8, // WebP品質 (1-100)
 }
 
 impl Default for ThumbnailConfig {
@@ -110,7 +110,7 @@ impl ThumbnailHandler {
 
     /// キャッシュファイルが古いキャッシュかどうかをチェック
     fn is_old_cache_file(&self, file_name: &str, path_hash: &str) -> bool {
-        file_name.starts_with(path_hash) && file_name.ends_with(".jpg")
+        file_name.starts_with(path_hash) && file_name.ends_with(".webp")
     }
 
     /// 指定されたパスの古いキャッシュファイルを削除
@@ -140,7 +140,7 @@ impl ThumbnailHandler {
 
             // 現在のキャッシュキーと一致する場合はスキップ
             let current_cache_key = self.generate_cache_key(image_path);
-            let current_cache_file = format!("{}.jpg", current_cache_key);
+            let current_cache_file = format!("{}.webp", current_cache_key);
             if file_name == current_cache_file {
                 continue;
             }
@@ -217,7 +217,7 @@ impl ThumbnailHandler {
         cache_dir: &PathBuf,
     ) -> Result<ThumbnailInfo, String> {
         let cache_key = self.generate_cache_key(image_path);
-        let cache_path = cache_dir.join(format!("{}.jpg", cache_key));
+        let cache_path = cache_dir.join(format!("{}.webp", cache_key));
 
         // キャッシュが有効かチェック
         if self.is_cache_valid(&cache_path, image_path) {
@@ -228,7 +228,7 @@ impl ThumbnailHandler {
                 data,
                 width: self.config.size,
                 height: self.config.size,
-                mime_type: "image/jpeg".to_string(),
+                mime_type: "image/webp".to_string(),
             });
         }
 
@@ -259,20 +259,17 @@ impl ThumbnailHandler {
 
         let mut buffer = Vec::new();
 
-        // 設定されたJPEG品質を使用
+        // WebPエンコーダーを使用
         let mut cursor = Cursor::new(&mut buffer);
-        let encoder =
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, self.config.quality);
-
         thumbnail
-            .write_with_encoder(encoder)
+            .write_to(&mut cursor, image::ImageFormat::WebP)
             .map_err(|e| format!("サムネイルのエンコードに失敗: {}", e))?;
 
         Ok(ThumbnailInfo {
             data: buffer,
             width,
             height,
-            mime_type: "image/jpeg".to_string(),
+            mime_type: "image/webp".to_string(),
         })
     }
 
