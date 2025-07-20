@@ -14,7 +14,8 @@ export class ImageCard extends HTMLElement {
 
     // 初期レイアウトを設定
     this.shadowRoot!.innerHTML = `
-      <a class="box">
+      <a>
+        <div class="spinner"></div>
         <img />
       </a>
 
@@ -23,10 +24,11 @@ export class ImageCard extends HTMLElement {
 
         :host {
           aspect-ratio: 1 / 1;
-          border: 1px solid rgb(0 56 48);
+          background-color: hsl(var(--bulma-dark-h), var(--bulma-dark-s), var(--bulma-dark-l));
           border-radius: 8px;
           overflow: hidden;
         }
+        
         a {
           text-decoration: none;
           width: 100%;
@@ -34,12 +36,43 @@ export class ImageCard extends HTMLElement {
           display: flex;
           justify-content: center;
           align-items: center;
+          position: relative;
         }
+        
+        .spinner {
+          width: 1.5em;
+          height: 1.5em;
+          border: 2px solid #dbdbdb;
+          border-radius: 9999px;
+          border-right-color: transparent;
+          border-top-color: transparent;
+          animation: spinAround 500ms infinite linear;
+          display: block;
+          position: relative;
+        }
+        
+        .spinner.loaded {
+          animation: none;
+          display: none;
+        }
+        
+        @keyframes spinAround {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(359deg);
+          }
+        }
+        
         img {
           width: 100%;
           height: 100%;
           object-fit: contain;
           display: none;
+          position: absolute;
+          top: 0;
+          left: 0;
         }
         
         img[src] {
@@ -55,8 +88,16 @@ export class ImageCard extends HTMLElement {
 
     if (name === "src") {
       const img = this.shadowRoot!.querySelector<HTMLImageElement>("img")!;
+      const spinner = this.shadowRoot!.querySelector<HTMLElement>(".spinner")!;
+
       img.src = newValue as string;
       img.loading = "lazy";
+
+      // 画像が読み込まれたらスピナーを非表示にする
+      img.onload = () => {
+        spinner.classList.add("loaded");
+      };
+
       return;
     }
 
