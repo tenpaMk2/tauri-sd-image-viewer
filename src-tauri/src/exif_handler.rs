@@ -15,9 +15,21 @@ pub fn read_exif_image_info(path: String) -> Result<Option<ExifImageInfo>, Strin
 
 /// バイトデータからEXIF情報を読み取り（中核処理）
 pub fn read_exif_from_bytes(data: &[u8], file_extension: FileExtension) -> Option<ExifImageInfo> {
-    // 直接バイトデータからメタデータを読み取り（一時ファイル不要）
-    let metadata = Metadata::new_from_vec(&data.to_vec(), file_extension).ok()?;
-    extract_exif_info_from_metadata(&metadata)
+    // WebPファイルの場合、VP8形式とVP8X形式の違いによりエラーが発生する可能性があるため、
+    // エラーをキャッチして適切に処理する
+    match std::panic::catch_unwind(|| Metadata::new_from_vec(&data.to_vec(), file_extension)) {
+        Ok(Ok(metadata)) => extract_exif_info_from_metadata(&metadata),
+        Ok(Err(_)) => {
+            // メタデータの読み取りに失敗した場合はNoneを返す
+            eprintln!("メタデータの読み取りに失敗しました（ファイル形式が対応していない可能性）");
+            None
+        }
+        Err(_) => {
+            // パニックが発生した場合はNoneを返す
+            eprintln!("メタデータの読み取り中にパニックが発生しました（WebPファイルの形式互換性の問題の可能性）");
+            None
+        }
+    }
 }
 
 /// ファイル拡張子を判定
@@ -82,8 +94,16 @@ pub fn write_exif_image_rating(path: String, rating: u32) -> Result<(), String> 
     }
 
     let png_path = Path::new(&path);
-    let mut png_data = Metadata::new_from_path(&png_path)
-        .map_err(|e| format!("メタデータ読み込みエラー: {}", e))?;
+
+    // パニックを防ぐためのエラーハンドリング
+    let mut png_data = match std::panic::catch_unwind(|| Metadata::new_from_path(&png_path)) {
+        Ok(Ok(metadata)) => metadata,
+        Ok(Err(e)) => return Err(format!("メタデータ読み込みエラー: {}", e)),
+        Err(_) => return Err(
+            "メタデータ読み込み中にパニックが発生しました（ファイル形式の互換性の問題の可能性）"
+                .to_string(),
+        ),
+    };
 
     png_data.set_tag(ExifTag::UnknownINT16U(
         vec![rating as u16],
