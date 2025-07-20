@@ -55,40 +55,69 @@ class GridViewer extends HTMLElement {
       `バッチでサムネイル処理開始: ${imageFullPaths.length}個のファイル`,
     );
 
-    try {
-      const results = (await invoke("load_thumbnails_batch", {
-        imagePaths: imageFullPaths,
-      })) as BatchThumbnailResult[];
+    // 小さなチャンクで逐次処理（UI応答性重視）
+    await this.loadThumbnailsSequentially(imageFullPaths);
 
-      for (const result of results) {
-        const imageCard = this.imageMap.get(result.path);
-        if (!imageCard) continue;
+    console.log("全サムネイル処理完了");
+  }
 
-        if (result.thumbnail) {
-          const url = createThumbnailUrl(result.thumbnail);
-          imageCard.setAttribute("src", url);
-          imageCard.setAttribute("width", result.thumbnail.width.toString());
-          imageCard.setAttribute("height", result.thumbnail.height.toString());
-          imageCard.setAttribute(
-            "href",
-            "view/?initialImagePath=" + encodeURIComponent(result.path),
-          );
-        } else if (result.error) {
-          console.error(
-            `Failed to load thumbnail: ${result.path}`,
-            result.error,
-          );
+  // 小さなチャンクで逐次処理（UIブロックを最小化）
+  private async loadThumbnailsSequentially(imageFullPaths: string[]) {
+    const CHUNK_SIZE = 5; // 非常に小さなチャンク
+
+    for (let i = 0; i < imageFullPaths.length; i += CHUNK_SIZE) {
+      const chunk = imageFullPaths.slice(i, i + CHUNK_SIZE);
+      const chunkIndex = Math.floor(i / CHUNK_SIZE) + 1;
+      const totalChunks = Math.ceil(imageFullPaths.length / CHUNK_SIZE);
+
+      console.log(
+        `チャンク ${chunkIndex}/${totalChunks} 処理開始 (${chunk.length}ファイル)`,
+      );
+
+      try {
+        const chunkStartTime = performance.now();
+
+        const results = (await invoke("load_thumbnails_batch", {
+          imagePaths: chunk,
+        })) as BatchThumbnailResult[];
+
+        const chunkRustTime = performance.now() - chunkStartTime;
+        console.log(
+          `チャンク ${chunkIndex}/${totalChunks} 処理時間: ${chunkRustTime.toFixed(2)}ms`,
+        );
+
+        // 即座にDOM更新
+        this.updateDOMImmediate(results);
+
+        // UI応答性のための短い待機
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`チャンク ${chunkIndex} エラー:`, error);
+        // エラー時は個別処理にフォールバック
+        for (const path of chunk) {
+          this.imageLoadQueue.add({ id: path });
         }
       }
+    }
+  }
 
-      console.log("バッチサムネイル処理完了");
-    } catch (error) {
-      console.error("バッチサムネイル処理でエラー:", error);
+  // DOM更新を即座に実行
+  private updateDOMImmediate(results: BatchThumbnailResult[]) {
+    for (const result of results) {
+      const imageCard = this.imageMap.get(result.path);
+      if (!imageCard) continue;
 
-      // フォールバック: 個別処理
-      console.log("個別処理にフォールバック");
-      for (const imageFullPath of imageFullPaths) {
-        this.imageLoadQueue.add({ id: imageFullPath });
+      if (result.thumbnail) {
+        const url = createThumbnailUrl(result.thumbnail);
+        imageCard.setAttribute("src", url);
+        imageCard.setAttribute("width", result.thumbnail.width.toString());
+        imageCard.setAttribute("height", result.thumbnail.height.toString());
+        imageCard.setAttribute(
+          "href",
+          "view/?initialImagePath=" + encodeURIComponent(result.path),
+        );
+      } else if (result.error) {
+        console.error(`Failed to load thumbnail: ${result.path}`, result.error);
       }
     }
   }

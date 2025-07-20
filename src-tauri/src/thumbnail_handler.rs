@@ -107,29 +107,10 @@ impl ThumbnailHandler {
 
     /// キャッシュが有効かチェック
     fn is_cache_valid(&self, cache_path: &Path, original_path: &str) -> bool {
-        log::info!(
-            "キャッシュ有効性チェック開始 - キャッシュ: {}, 元ファイル: {}",
-            cache_path.display(),
-            original_path
-        );
-
         let cache_exists = cache_path.exists();
         let original_exists = Path::new(original_path).exists();
 
-        match (cache_exists, original_exists) {
-            (false, _) => {
-                log::info!("キャッシュファイルが存在しません: {}", cache_path.display());
-                false
-            }
-            (true, false) => {
-                log::info!("元ファイルが存在しません: {}", original_path);
-                false
-            }
-            (true, true) => {
-                log::info!("キャッシュ有効: {}", cache_path.display());
-                true
-            }
-        }
+        matches!((cache_exists, original_exists), (true, true))
     }
 
     /// キャッシュファイルが古いキャッシュかどうかをチェック
@@ -165,7 +146,6 @@ impl ThumbnailHandler {
             match fs::remove_file(&path) {
                 Ok(_) => {
                     removed_count += 1;
-                    log::info!("古いキャッシュファイルを削除: {}", path.display());
                 }
                 Err(e) => {
                     log::warn!(
@@ -190,24 +170,42 @@ impl ThumbnailHandler {
         image_paths: &[String],
         _app: &AppHandle<R>,
     ) -> Vec<BatchThumbnailResult> {
-        // 並列処理でサムネイルを生成（キャッシュディレクトリを直接使用）
-        image_paths
-            .par_iter()
-            .map(
-                |path| match self.get_thumbnail_with_cache_dir(path, &self.cache_dir) {
-                    Ok(thumbnail) => BatchThumbnailResult {
-                        path: path.clone(),
-                        thumbnail: Some(thumbnail),
-                        error: None,
-                    },
-                    Err(e) => BatchThumbnailResult {
-                        path: path.clone(),
-                        thumbnail: None,
-                        error: Some(e),
-                    },
-                },
-            )
-            .collect()
+        // CPUコア数の70%を使用（UIレンダリング用にコアを残す）
+        let available_cores = std::thread::available_parallelism()
+            .map(|cores| cores.get())
+            .unwrap_or(4); // フォールバック値
+        let max_threads = std::cmp::max(1, (available_cores as f64 * 0.7) as usize);
+
+        log::info!(
+            "利用可能コア: {}, 使用コア: {}",
+            available_cores,
+            max_threads
+        );
+
+        // 並列処理でサムネイルを生成（制限付き並列度）
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(max_threads)
+            .build()
+            .unwrap()
+            .install(|| {
+                image_paths
+                    .par_iter()
+                    .map(
+                        |path| match self.get_thumbnail_with_cache_dir(path, &self.cache_dir) {
+                            Ok(thumbnail) => BatchThumbnailResult {
+                                path: path.clone(),
+                                thumbnail: Some(thumbnail),
+                                error: None,
+                            },
+                            Err(e) => BatchThumbnailResult {
+                                path: path.clone(),
+                                thumbnail: None,
+                                error: Some(e),
+                            },
+                        },
+                    )
+                    .collect()
+            })
     }
 
     /// キャッシュディレクトリを直接指定してサムネイル生成（Mutexフリー）
@@ -224,7 +222,6 @@ impl ThumbnailHandler {
             let data = fs::read(&cache_path)
                 .map_err(|e| format!("キャッシュファイルの読み込みに失敗: {}", e))?;
 
-            log::info!("サムネイルキャッシュから読み込み: {}", cache_path.display());
             return Ok(ThumbnailInfo {
                 data,
                 width: self.config.size,
@@ -239,8 +236,6 @@ impl ThumbnailHandler {
         // キャッシュに保存
         if let Err(e) = fs::write(&cache_path, &thumbnail_info.data) {
             log::warn!("サムネイルキャッシュの保存に失敗: {}", e);
-        } else {
-            log::info!("サムネイルキャッシュに保存: {}", cache_path.display());
         }
 
         Ok(thumbnail_info)
@@ -260,7 +255,6 @@ impl ThumbnailHandler {
             let data = fs::read(&cache_path)
                 .map_err(|e| format!("キャッシュファイルの読み込みに失敗: {}", e))?;
 
-            log::info!("サムネイルキャッシュから読み込み: {}", cache_path.display());
             return Ok(ThumbnailInfo {
                 data,
                 width: self.config.size,
@@ -280,8 +274,6 @@ impl ThumbnailHandler {
         // キャッシュに保存
         if let Err(e) = fs::write(&cache_path, &thumbnail_info.data) {
             log::warn!("サムネイルキャッシュの保存に失敗: {}", e);
-        } else {
-            log::info!("サムネイルキャッシュに保存: {}", cache_path.display());
         }
 
         Ok(thumbnail_info)
@@ -389,12 +381,19 @@ pub fn load_thumbnails_batch<R: Runtime>(
     app: AppHandle<R>,
     state: tauri::State<ThumbnailState>,
 ) -> Vec<BatchThumbnailResult> {
-    log::info!(
-        "バッチでサムネイル処理開始: {}個のファイル",
-        image_paths.len()
-    );
+    let start_time = std::time::Instant::now();
+    let count = image_paths.len();
+
     let results = state.handler.get_thumbnails_batch(&image_paths, &app);
-    log::info!("バッチサムネイル処理完了");
+
+    let duration = start_time.elapsed();
+    log::info!(
+        "バッチサムネイル処理完了: {}ファイル, {:.1}ms ({:.1}ms/ファイル)",
+        count,
+        duration.as_secs_f64() * 1000.0,
+        duration.as_secs_f64() * 1000.0 / count as f64
+    );
+
     results
 }
 
