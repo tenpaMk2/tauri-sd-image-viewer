@@ -13,25 +13,32 @@ const createThumbnailUrl = (thumbnailInfo: ThumbnailInfo): string => {
   return URL.createObjectURL(blob);
 };
 
+// 配列をチャンクに分割するユーティリティ関数
+const createChunks = <T>(array: T[], chunkSize: number): T[][] =>
+  Array.from({ length: Math.ceil(array.length / chunkSize) }, (_, i) =>
+    array.slice(i * chunkSize, (i + 1) * chunkSize),
+  );
+
 class GridViewer extends HTMLElement {
   readonly imageMap = new Map<string, ImageCard>();
 
   async connectedCallback() {
     const urlParams = new URLSearchParams(window.location.search);
     console.log({ "urlParams.get('dir')": urlParams.get("dir") });
-    const TARGET_DIR = urlParams.get("dir") || (await path.downloadDir());
+    const TARGET_DIR = urlParams.get("dir") ?? (await path.downloadDir());
 
     const dirEntries = await readDir(TARGET_DIR);
     const imageEntries = dirEntries.filter((entry) => {
       if (!entry.isFile) return false;
-      const ext = entry.name.split(".").pop()?.toLowerCase();
-      return ext && SUPPORTED_IMAGE_EXTS.some((x) => x === ext);
+      const ext = entry.name.split(".").at(-1)?.toLowerCase();
+      return (
+        ext && SUPPORTED_IMAGE_EXTS.some((supportedExt) => supportedExt === ext)
+      );
     });
 
     const imageFullPaths = await Promise.all(
       imageEntries
-        .map((entry) => entry.name)
-        .map((filename) => path.join(TARGET_DIR, filename))
+        .map(async (entry) => await path.join(TARGET_DIR, entry.name))
         .sort(),
     );
 
@@ -66,21 +73,16 @@ class GridViewer extends HTMLElement {
   // チャンクごとの並列処理（効率的なバッチ処理）
   async loadThumbnailsBatch(imageFullPaths: string[]) {
     const CHUNK_SIZE = 16; // チャンクサイズ
-    const chunks = [];
 
-    // 配列をチャンクに分割
-    for (let i = 0; i < imageFullPaths.length; i += CHUNK_SIZE) {
-      chunks.push(imageFullPaths.slice(i, i + CHUNK_SIZE));
-    }
+    // 配列をチャンクに分割（モダンな書き方）
+    const chunks = createChunks(imageFullPaths, CHUNK_SIZE);
 
     console.log(
       `チャンク処理開始: ${chunks.length}チャンク, チャンクサイズ: ${CHUNK_SIZE}`,
     );
 
-    // チャンクごとに処理
-    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-      const chunk = chunks[chunkIndex];
-
+    // チャンクごとに処理（モダンなfor...of）
+    for (const [chunkIndex, chunk] of chunks.entries()) {
       try {
         const startTime = performance.now();
 
@@ -92,13 +94,14 @@ class GridViewer extends HTMLElement {
         const processingTime = performance.now() - startTime;
 
         // 結果を即座にUI更新
-        for (const result of results) {
-          if (result.thumbnail) {
-            this.updateSingleImage(result.path, result.thumbnail);
-          } else if (result.error) {
-            console.error(`サムネイル処理エラー: ${result.path}`, result.error);
+        results.forEach((result) => {
+          const { path, thumbnail, error } = result;
+          if (thumbnail) {
+            this.updateSingleImage(path, thumbnail);
+          } else if (error) {
+            console.error(`サムネイル処理エラー: ${path}`, error);
           }
-        }
+        });
 
         console.log(
           `チャンク ${chunkIndex + 1}/${chunks.length} 完了: ${processingTime.toFixed(1)}ms (${chunk.length}ファイル)`,

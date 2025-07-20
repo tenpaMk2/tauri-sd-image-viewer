@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime};
 
 /// サムネイルの設定
@@ -100,15 +100,10 @@ impl ThumbnailHandler {
         format!("{}_{}", path_hash, content_hash)
     }
 
-    /// キャッシュファイルのパスを取得
-    fn get_cache_file_path(&self, cache_key: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.jpg", cache_key))
-    }
-
     /// キャッシュが有効かチェック
-    fn is_cache_valid(&self, cache_path: &Path, original_path: &str) -> bool {
+    fn is_cache_valid(&self, cache_path: &PathBuf, original_path: &str) -> bool {
         let cache_exists = cache_path.exists();
-        let original_exists = Path::new(original_path).exists();
+        let original_exists = std::path::Path::new(original_path).exists();
 
         matches!((cache_exists, original_exists), (true, true))
     }
@@ -143,6 +138,13 @@ impl ThumbnailHandler {
                 continue;
             }
 
+            // 現在のキャッシュキーと一致する場合はスキップ
+            let current_cache_key = self.generate_cache_key(image_path);
+            let current_cache_file = format!("{}.jpg", current_cache_key);
+            if file_name == current_cache_file {
+                continue;
+            }
+
             match fs::remove_file(&path) {
                 Ok(_) => {
                     removed_count += 1;
@@ -164,8 +166,8 @@ impl ThumbnailHandler {
         Ok(())
     }
 
-    /// バッチでサムネイルを生成または取得（並列処理）
-    pub fn get_thumbnails_batch<R: Runtime>(
+    /// バッチでサムネイルを処理（並列読み込み・生成）
+    pub fn process_thumbnails_batch<R: Runtime>(
         &self,
         image_paths: &[String],
         _app: &AppHandle<R>,
@@ -191,7 +193,7 @@ impl ThumbnailHandler {
                 image_paths
                     .par_iter()
                     .map(
-                        |path| match self.get_thumbnail_with_cache_dir(path, &self.cache_dir) {
+                        |path| match self.load_or_generate_thumbnail(path, &self.cache_dir) {
                             Ok(thumbnail) => BatchThumbnailResult {
                                 path: path.clone(),
                                 thumbnail: Some(thumbnail),
@@ -208,47 +210,14 @@ impl ThumbnailHandler {
             })
     }
 
-    /// キャッシュディレクトリを直接指定してサムネイル生成（Mutexフリー）
-    fn get_thumbnail_with_cache_dir(
+    /// サムネイルを読み込みまたは生成（キャッシュ優先）
+    fn load_or_generate_thumbnail(
         &self,
         image_path: &str,
         cache_dir: &PathBuf,
     ) -> Result<ThumbnailInfo, String> {
         let cache_key = self.generate_cache_key(image_path);
         let cache_path = cache_dir.join(format!("{}.jpg", cache_key));
-
-        // キャッシュが有効かチェック
-        if self.is_cache_valid(&cache_path, image_path) {
-            let data = fs::read(&cache_path)
-                .map_err(|e| format!("キャッシュファイルの読み込みに失敗: {}", e))?;
-
-            return Ok(ThumbnailInfo {
-                data,
-                width: self.config.size,
-                height: self.config.size,
-                mime_type: "image/jpeg".to_string(),
-            });
-        }
-
-        // 新しいサムネイルを生成
-        let thumbnail_info = self.generate_thumbnail(image_path)?;
-
-        // キャッシュに保存
-        if let Err(e) = fs::write(&cache_path, &thumbnail_info.data) {
-            log::warn!("サムネイルキャッシュの保存に失敗: {}", e);
-        }
-
-        Ok(thumbnail_info)
-    }
-
-    /// サムネイルを生成または取得
-    pub fn get_thumbnail<R: Runtime>(
-        &self,
-        image_path: &str,
-        _app: &AppHandle<R>,
-    ) -> Result<ThumbnailInfo, String> {
-        let cache_key = self.generate_cache_key(image_path);
-        let cache_path = self.get_cache_file_path(&cache_key);
 
         // キャッシュが有効かチェック
         if self.is_cache_valid(&cache_path, image_path) {
@@ -371,17 +340,6 @@ impl ThumbnailState {
     }
 }
 
-/// サムネイルをキャッシュから読み込む（なければ生成）Tauriコマンド（非同期版）
-#[tauri::command]
-pub async fn load_thumbnail_from_cache<R: Runtime>(
-    image_path: String,
-    app: AppHandle<R>,
-    state: tauri::State<'_, ThumbnailState>,
-) -> Result<ThumbnailInfo, String> {
-    // シンプルに非同期で処理
-    state.handler.get_thumbnail(&image_path, &app)
-}
-
 /// バッチでサムネイルを生成または取得するTauriコマンド（非同期版）
 #[tauri::command]
 pub async fn load_thumbnails_batch<R: Runtime>(
@@ -393,7 +351,7 @@ pub async fn load_thumbnails_batch<R: Runtime>(
     let count = image_paths.len();
 
     let processing_start = std::time::Instant::now();
-    let results = state.handler.get_thumbnails_batch(&image_paths, &app);
+    let results = state.handler.process_thumbnails_batch(&image_paths, &app);
     let processing_duration = processing_start.elapsed();
 
     let total_duration = start_time.elapsed();

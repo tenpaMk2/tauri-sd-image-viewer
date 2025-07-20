@@ -71,7 +71,6 @@ pub fn run() {
             // 統合操作
             image_handler::read_comprehensive_image_info,
             // サムネイル操作
-            thumbnail_handler::load_thumbnail_from_cache,
             thumbnail_handler::load_thumbnails_batch,
             thumbnail_handler::clear_thumbnail_cache,
         ])
