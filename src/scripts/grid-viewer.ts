@@ -84,8 +84,8 @@ class GridViewer extends HTMLElement {
 
     const imageFullPaths = await Promise.all(
       imageEntries
-        .map(async (entry) => await path.join(TARGET_DIR, entry.name))
-        .sort(),
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(async (entry) => await path.join(TARGET_DIR, entry.name)),
     );
 
     // 先にDOM更新（プレースホルダー表示）
