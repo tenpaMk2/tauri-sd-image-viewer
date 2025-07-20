@@ -30,7 +30,7 @@ class ImageViewer extends HTMLElement {
     document.dispatchEvent(
       new CustomEvent<OpenBrowserEventDetail>("open-browser", {
         detail: { dir: await path.dirname(this.currentImagePath) },
-      })
+      }),
     );
   };
 
@@ -40,7 +40,7 @@ class ImageViewer extends HTMLElement {
       document.dispatchEvent(
         new CustomEvent("clipboard-copy-failed", {
           detail: { error: "No image path available" },
-        })
+        }),
       );
       return;
     }
@@ -56,7 +56,7 @@ class ImageViewer extends HTMLElement {
       document.dispatchEvent(
         new CustomEvent("clipboard-copy-success", {
           detail: { path: this.currentImagePath },
-        })
+        }),
       );
     } catch (error) {
       console.error("Failed to copy image to clipboard:", error);
@@ -65,13 +65,13 @@ class ImageViewer extends HTMLElement {
           detail: {
             error: error instanceof Error ? error.message : String(error),
           },
-        })
+        }),
       );
     }
   };
 
   private writeImageRating = async (
-    event: CustomEvent<WriteImageRatingEventDetail>
+    event: CustomEvent<WriteImageRatingEventDetail>,
   ) => {
     const { rating } = event.detail;
 
@@ -80,32 +80,36 @@ class ImageViewer extends HTMLElement {
       return;
     }
 
+    await this.writeRatingToPath(this.currentImagePath, rating);
+  };
+
+  private async writeRatingToPath(path: string, rating: number) {
     try {
       await invoke("write_exif_image_rating", {
-        path: this.currentImagePath,
+        path: path,
         rating: rating,
       });
-      console.log(`Rating ${rating} written to ${this.currentImagePath}`);
+      console.log(`Rating ${rating} written to ${path}`);
 
       // rating書き込み成功を通知
       document.dispatchEvent(
         new CustomEvent("image-rating-write-success", {
-          detail: { path: this.currentImagePath, rating },
-        })
+          detail: { path: path, rating },
+        }),
       );
     } catch (error) {
       console.error("Failed to write rating:", error);
       document.dispatchEvent(
         new CustomEvent("image-rating-write-failed", {
           detail: {
-            path: this.currentImagePath,
+            path: path,
             rating,
             error: error instanceof Error ? error.message : String(error),
           },
-        })
+        }),
       );
     }
-  };
+  }
 
   private createAutoReloadCallback = (): (() => Promise<void>) => {
     return async () => {
@@ -180,7 +184,7 @@ class ImageViewer extends HTMLElement {
     // 他のイベントリスナーもクリーンアップ
     document.removeEventListener(
       "navigate-to-previous",
-      this.showPreviousImage
+      this.showPreviousImage,
     );
     document.removeEventListener("navigate-to-next", this.showNextImage);
     document.removeEventListener("open-browser-from-viewer", this.openBrowser);
@@ -188,11 +192,11 @@ class ImageViewer extends HTMLElement {
     document.removeEventListener("write-image-rating", this.writeImageRating);
     document.removeEventListener(
       "auto-reload-start",
-      this.requestStartAutoReload
+      this.requestStartAutoReload,
     );
     document.removeEventListener(
       "auto-reload-stop",
-      this.requestStopAutoReload
+      this.requestStopAutoReload,
     );
 
     // 自動リロードを停止
@@ -245,7 +249,7 @@ class ImageViewer extends HTMLElement {
    */
   async navigateImage(
     direction: "previous" | "next" | "last",
-    options: { stopAutoReload?: boolean } = { stopAutoReload: true }
+    options: { stopAutoReload?: boolean } = { stopAutoReload: true },
   ) {
     if (!this.currentImagePath) {
       console.error("No image path available");
@@ -260,7 +264,7 @@ class ImageViewer extends HTMLElement {
 
     const newImagePath = await ImageNavigator.findImageInDirection(
       this.currentImagePath,
-      direction
+      direction,
     );
 
     if (newImagePath && newImagePath !== this.currentImagePath) {
@@ -277,7 +281,7 @@ class ImageViewer extends HTMLElement {
         "read_comprehensive_image_info",
         {
           path: filePath,
-        }
+        },
       );
 
       console.log("Read image info");
@@ -287,7 +291,7 @@ class ImageViewer extends HTMLElement {
       document.dispatchEvent(
         new CustomEvent("read-image-info", {
           detail: { ...result, path: filePath },
-        })
+        }),
       );
     } catch (error) {
       console.error("Failed to load image metadata:", error);

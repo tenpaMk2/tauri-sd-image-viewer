@@ -3,6 +3,7 @@ import type { ImageCard } from "@scripts/image-card";
 import { path } from "@tauri-apps/api";
 import { invoke } from "@tauri-apps/api/core";
 import { readDir } from "@tauri-apps/plugin-fs";
+import type { WriteImageRatingWithPathEventDetail } from "./global";
 import { SUPPORTED_IMAGE_EXTS } from "./mine-type";
 import type { BatchThumbnailResult, ThumbnailInfo } from "./rust-synced-types";
 
@@ -21,6 +22,51 @@ const createChunks = <T>(array: T[], chunkSize: number): T[][] =>
 
 class GridViewer extends HTMLElement {
   readonly imageMap = new Map<string, ImageCard>();
+
+  constructor() {
+    super();
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners() {
+    // グリッド用のレーティング書き込みイベントをリッスン
+    document.addEventListener(
+      "write-image-rating-with-path",
+      this.handleWriteImageRatingWithPath,
+    );
+  }
+
+  private handleWriteImageRatingWithPath = async (event: Event) => {
+    const customEvent =
+      event as CustomEvent<WriteImageRatingWithPathEventDetail>;
+    const { rating, path } = customEvent.detail;
+
+    try {
+      await invoke("write_exif_image_rating", {
+        path: path,
+        rating: rating,
+      });
+      console.log(`Rating ${rating} written to ${path}`);
+
+      // rating書き込み成功を通知
+      document.dispatchEvent(
+        new CustomEvent("image-rating-write-success", {
+          detail: { path: path, rating },
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to write rating:", error);
+      document.dispatchEvent(
+        new CustomEvent("image-rating-write-failed", {
+          detail: {
+            path: path,
+            rating,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        }),
+      );
+    }
+  };
 
   async connectedCallback() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -68,6 +114,7 @@ class GridViewer extends HTMLElement {
     );
     imageCard.setAttribute("width", thumbnail.width.toString());
     imageCard.setAttribute("height", thumbnail.height.toString());
+    imageCard.setAttribute("data-image-path", imagePath);
 
     // メタデータがある場合、追加情報を設定（実験的）
     if (thumbnail.metadata) {
@@ -150,6 +197,13 @@ class GridViewer extends HTMLElement {
     }
 
     console.log("全チャンク処理完了");
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener(
+      "write-image-rating-with-path",
+      this.handleWriteImageRatingWithPath,
+    );
   }
 }
 

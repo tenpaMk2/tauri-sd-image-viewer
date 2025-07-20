@@ -31,7 +31,10 @@ const ratings = Array.from({ length: maxRating }, (_, i) => i + 1);
 </star-rating>
 
 <script>
-  import type { ReadImageInfoEventDetail } from "../scripts/global";
+  import type {
+    ImageRatingWriteSuccessEventDetail,
+    ReadImageInfoEventDetail,
+  } from "../scripts/global";
 
   export class StarRating extends HTMLElement {
     starElements!: Array<{ fill: Element; empty: Element }>;
@@ -52,21 +55,40 @@ const ratings = Array.from({ length: maxRating }, (_, i) => i + 1);
 
       // 画像情報イベントをリッスンしてレーティングを取得
       document.addEventListener("read-image-info", this.handleReadImageInfo);
+
+      // レーティング書き込み成功イベントをリッスン
+      document.addEventListener(
+        "image-rating-write-success",
+        this.handleRatingWriteSuccess
+      );
+    }
+
+    disconnectedCallback() {
+      document.removeEventListener("read-image-info", this.handleReadImageInfo);
+      document.removeEventListener(
+        "image-rating-write-success",
+        this.handleRatingWriteSuccess
+      );
     }
 
     private handleStarClick = async (event: Event) => {
       const button = event.currentTarget as HTMLButtonElement;
       const rating = parseInt(button.dataset.rating || "0");
 
-      // ImageViewerにrating書き込みを依頼（パスは不要）
+      // ImageViewerにrating書き込みを依頼（現在の画像を対象）
       document.dispatchEvent(
         new CustomEvent("write-image-rating", {
           detail: { rating: rating },
         })
       );
 
-      // 即座にUI更新（楽観的更新）
-      // TODO: `image-rating-write-success` イベントなどに対応
+      // 楽観的更新は削除、成功イベントで更新
+    };
+
+    private handleRatingWriteSuccess = (event: Event) => {
+      const customEvent =
+        event as CustomEvent<ImageRatingWriteSuccessEventDetail>;
+      const { rating } = customEvent.detail;
       this.updateRatingDisplay(rating);
     };
 

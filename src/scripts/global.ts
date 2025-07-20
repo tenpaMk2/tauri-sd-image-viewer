@@ -28,6 +28,11 @@ export type WriteImageRatingEventDetail = {
   rating: number;
 };
 
+export type WriteImageRatingWithPathEventDetail = {
+  rating: number;
+  path: string;
+};
+
 export type ImageRatingWriteSuccessEventDetail = {
   path: string;
   rating: number;
@@ -53,6 +58,7 @@ declare global {
     "clipboard-copy-success": CustomEvent<ClipboardCopySuccessEventDetail>;
     "clipboard-copy-failed": CustomEvent<ClipboardCopyFailedEventDetail>;
     "write-image-rating": CustomEvent<WriteImageRatingEventDetail>;
+    "write-image-rating-with-path": CustomEvent<WriteImageRatingWithPathEventDetail>;
     "image-rating-write-success": CustomEvent<ImageRatingWriteSuccessEventDetail>;
     "image-rating-write-failed": CustomEvent<ImageRatingWriteFailedEventDetail>;
     "auto-reload-start": CustomEvent;
