@@ -3,9 +3,9 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Cursor;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime};
+use webp::Encoder;
 
 /// サムネイルの設定
 #[derive(Debug, Clone)]
@@ -18,7 +18,7 @@ impl Default for ThumbnailConfig {
     fn default() -> Self {
         Self {
             size: 300,
-            quality: 85,
+            quality: 50,
         }
     }
 }
@@ -257,16 +257,19 @@ impl ThumbnailHandler {
         let thumbnail = img.thumbnail(self.config.size, self.config.size);
         let (width, height) = thumbnail.dimensions();
 
-        let mut buffer = Vec::new();
+        // RGBAバイト配列に変換
+        let rgba_image = thumbnail.to_rgba8();
+        let rgba_data = rgba_image.as_raw();
 
-        // WebPエンコーダーを使用
-        let mut cursor = Cursor::new(&mut buffer);
-        thumbnail
-            .write_to(&mut cursor, image::ImageFormat::WebP)
-            .map_err(|e| format!("サムネイルのエンコードに失敗: {}", e))?;
+        // webpクレートを使用して品質設定付きでエンコード
+        let encoder = Encoder::from_rgba(rgba_data, width, height);
+
+        // シンプルなエンコード（品質のみ指定）
+        let webp_memory = encoder.encode(self.config.quality as f32);
+        let encoded_data = webp_memory.to_vec();
 
         Ok(ThumbnailInfo {
-            data: buffer,
+            data: encoded_data,
             width,
             height,
             mime_type: "image/webp".to_string(),
