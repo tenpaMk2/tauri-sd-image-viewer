@@ -14,7 +14,7 @@ export class ImageCard extends HTMLElement {
 
     // 初期レイアウトを設定
     this.shadowRoot!.innerHTML = `
-      <a>
+      <a class="box">
         <img />
       </a>
 
@@ -39,13 +39,11 @@ export class ImageCard extends HTMLElement {
           width: 100%;
           height: 100%;
           object-fit: contain;
-          background: repeating-linear-gradient(
-            45deg,
-            rgb(0 56 48),
-            rgb(0 56 48) 10px,
-            rgb(0 0 0 / 0) 10px,
-            rgb(0 0 0 / 0) 20px
-          );
+          display: none;
+        }
+        
+        img[src] {
+          display: block;
         }
       </style>
     `;
