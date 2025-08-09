@@ -1,8 +1,6 @@
 # tauri-sd-image-viewer
 
-🚧W.I.P.🚧
+This repository has archived.
+See new repository:
 
-```shell
-bun install
-bun run tauri dev
-```
+- [@tenpamk2/tauri-sd-image-viewer2](https://github.com/tenpaMk2/tauri-sd-image-viewer2)
